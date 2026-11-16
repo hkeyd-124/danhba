@@ -5,10 +5,13 @@ Web mô phỏng ứng dụng **Danh bạ** trên điện thoại / iPad, dành c
 ## Cấu trúc (2 trang riêng)
 
 ```
-index.html    # TRANG 1 — chọn hệ điều hành (iOS / Android)
-sim.html      # TRANG 2 — sân khấu mô phỏng thiết bị
-styles.css    # toàn bộ style cho thiết bị, iOS và Android
-app.js        # dữ liệu, render, điều hướng, localStorage
+index.html        # TRANG 1 — chọn hệ điều hành (iOS / Android)
+sim.html          # TRANG 2 — sân khấu mô phỏng thiết bị
+styles.css        # style cho thiết bị, iOS và Android
+app.js            # dữ liệu, render, điều hướng, localStorage
+call-message.css  # style cho màn hình gọi và hội thoại tin nhắn
+call-message.js   # mô phỏng gọi đi + nhắn tin (nạp sau app.js)
+fix-v4.css        # ghi đè: chống chớp tắt + auto scale (nạp cuối)
 ```
 
 Hai trang tách hẳn nhau: `index.html` chỉ để chọn OS, bấm vào thẻ iOS/Android sẽ mở
@@ -30,8 +33,11 @@ Không cần build, không cần cài đặt. Mở `index.html` là chạy.
   - **Danh bạ** — toàn bộ liên hệ, nhóm A–Z, tìm kiếm.
   - **Yêu thích** — các liên hệ được đánh dấu sao (bật/tắt bằng ngôi sao trên thanh trên cùng hoặc trong menu `⋮`).
   - **Nhật ký** — lịch sử cuộc gọi, nhóm theo Hôm nay / Hôm qua / ngày; bấm "Gọi" trong chi tiết sẽ ghi một mục vào đây; có nút xoá nhật ký.
+- **Gọi giả**: bấm **Gọi** trong danh bạ để mở màn hình gọi đi — hiện trạng thái "đang gọi…" rồi tự chuyển sang đếm thời gian; có 6 nút tròn (Tắt tiếng, Bàn phím, Loa, Thêm, Video, Danh bạ), bàn phím trong cuộc gọi bấm được, và nút đỏ kết thúc để thoát về. Bố cục khác nhau đúng kiểu iOS và Android.
+- **Nhắn tin giả**: bấm **Nhắn tin** để mở hội thoại — gõ và gửi được (nút gửi hoặc phím Enter), bong bóng chat hiện ra đúng kiểu iOS (xanh gradient) và Android (Material You), tin nhắn neo đáy, có nhãn ngày và giờ gửi. Tin nhắn được lưu lại.
 - **Luồng đầy đủ**: xem danh sách → xem chi tiết → thêm mới → sửa → xoá → tìm kiếm (gõ không dấu vẫn tìm được).
-- **Lưu local**: toàn bộ danh bạ lưu trong `localStorage` của trình duyệt, không dùng Firestore hay backend.
+- **Auto scale**: khung thiết bị tự thu/phóng để luôn hiện trọn trong màn hình, dù để màn hình dọc hay ngang.
+- **Lưu local**: toàn bộ danh bạ, tin nhắn và nhật ký lưu trong `localStorage` của trình duyệt, không dùng Firestore hay backend.
 
 ## Chạy thử
 
@@ -48,4 +54,4 @@ python3 -m http.server 8000
 
 - Dữ liệu chỉ nằm trên máy đang dùng: đổi trình duyệt, đổi thiết bị hoặc xoá dữ liệu trang sẽ mất danh bạ.
 - Nút **Đặt lại dữ liệu** đưa danh bạ về danh sách mẫu ban đầu.
-- Các chức năng ngoài phạm vi (gọi điện, nhắn tin, FaceTime…) chỉ hiển thị thông báo mô phỏng, không thực hiện cuộc gọi thật.
+- Đây là mô phỏng: không có cuộc gọi hay tin nhắn nào thực sự được gửi đi. Các nút ngoài phạm vi (Video, Thêm, Danh bạ trong cuộc gọi, FaceTime…) chỉ hiện thông báo mô phỏng.

@@ -259,7 +259,8 @@
     call = {
       contactId: c.id, name: displayName(c), phone: num,
       phase: 'connecting', connectedAt: 0,
-      muted: false, speaker: false, keypad: false, keys: ''
+      muted: false, speaker: false, keypad: false, keys: '',
+      justOpened: true
     };
     thread = null;
     logCall(c, num);
@@ -351,7 +352,11 @@
       '</div>';
     }
 
-    ensureLayer().innerHTML = '<div class="call call--' + os + '">' +
+    /* Hiệu ứng chỉ chạy lúc mở màn hình gọi, không phát lại khi bấm nút. */
+    var entering = call.justOpened ? ' is-entering' : '';
+    call.justOpened = false;
+
+    ensureLayer().innerHTML = '<div class="call call--' + os + entering + '">' +
       '<div class="call-bg" aria-hidden="true"></div>' +
       '<div class="call-inner">' + statusBar(os) + head +
         '<div class="call-bottom">' + bottom + endBtn + '</div>' +
@@ -365,7 +370,7 @@
     var c = getContact(contactId);
     if (!c) return;
     call = null;
-    thread = { contactId: c.id, draft: '' };
+    thread = { contactId: c.id, draft: '', justOpened: true };
     renderThread();
   }
 
@@ -376,6 +381,9 @@
     pushMessage(thread.contactId, text);
     thread.draft = '';
     renderThread();
+    /* Giữ con trỏ trong ô soạn tin để gõ tiếp ngay, không bị mất focus. */
+    var inp = layer && layer.querySelector('#msg-input');
+    if (inp) inp.focus();
   }
 
   function renderThread() {
@@ -431,7 +439,10 @@
       '<button class="msg-send' + ((thread.draft || '').trim() ? ' is-ready' : '') + '" type="button" data-cm="send-message" aria-label="Gửi">' + ICON.send + '</button>' +
     '</div>';
 
-    ensureLayer().innerHTML = '<div class="app app--msg" data-os="' + os + '">' +
+    var entering = thread.justOpened ? ' is-entering' : '';
+    thread.justOpened = false;
+
+    ensureLayer().innerHTML = '<div class="app app--msg' + entering + '" data-os="' + os + '">' +
       statusBar(os) + nav +
       '<div class="app-body">' +
         '<div class="msg-scroll" id="msg-scroll">' + body + '</div>' +

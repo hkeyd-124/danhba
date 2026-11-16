@@ -1114,7 +1114,10 @@
      RENDER
      ------------------------------------------------------------ */
 
-  function render() {
+  /* Cờ: hiệu ứng mở app chỉ chạy MỘT LẦN, không phát lại mỗi lần render. */
+  var animateApp = false;
+
+  function buildHTML() {
     var html = '';
     if (state.screen === 'home') {
       html = renderHome();
@@ -1132,7 +1135,16 @@
       else if (state.screen === 'form') html = renderAndroidForm();
     }
 
-    els.screen.innerHTML = html + renderOverlay();
+    return html + renderOverlay();
+  }
+
+  function render() {
+    els.screen.innerHTML = buildHTML();
+    if (animateApp) {
+      var appEl = els.screen.querySelector('.app');
+      if (appEl) appEl.classList.add('is-entering');
+      animateApp = false;
+    }
     els.device.setAttribute('data-os', state.os);
     els.island.style.display = state.os === 'ios' ? 'block' : 'none';
     els.punch.style.display = state.os === 'android' ? 'block' : 'none';
@@ -1145,18 +1157,41 @@
     fitDevice();
   }
 
+  /* Cập nhật CHỈ phần danh sách khi gõ tìm kiếm — không dựng lại cả màn hình,
+     nên không mất focus và không chớp tắt. */
+  function refreshList() {
+    if (state.screen !== 'list') return;
+    var tmp = document.createElement('div');
+    tmp.innerHTML = buildHTML();
+
+    var newScroll = tmp.querySelector('#ios-scroll, #md-scroll');
+    var oldScroll = els.screen.querySelector('#ios-scroll, #md-scroll');
+    if (newScroll && oldScroll) oldScroll.innerHTML = newScroll.innerHTML;
+
+    var oldIdx = els.screen.querySelector('.ios-index');
+    if (oldIdx && oldIdx.parentNode) oldIdx.parentNode.removeChild(oldIdx);
+    var newIdx = tmp.querySelector('.ios-index');
+    if (newIdx) {
+      var ab = els.screen.querySelector('.app-body');
+      if (ab) ab.appendChild(newIdx);
+    }
+
+    var newClear = tmp.querySelector('[data-action="clear-search"]');
+    var oldClear = els.screen.querySelector('[data-action="clear-search"]');
+    if (newClear && !oldClear) {
+      var wrap = els.screen.querySelector('.ios-search, .md-search');
+      if (wrap) wrap.appendChild(newClear);
+    } else if (!newClear && oldClear && oldClear.parentNode) {
+      oldClear.parentNode.removeChild(oldClear);
+    }
+  }
+
   function bindInputs() {
     var search = els.screen.querySelector('#ios-search, #md-search');
     if (search) {
       search.addEventListener('input', function () {
         state.query = search.value;
-        var pos = search.selectionStart;
-        render();
-        var again = els.screen.querySelector('#ios-search, #md-search');
-        if (again) {
-          again.focus();
-          try { again.setSelectionRange(pos, pos); } catch (e) { /* bỏ qua */ }
-        }
+        refreshList();
       });
     }
 
@@ -1182,6 +1217,7 @@
     state.tab = 'contacts';
     state.query = '';
     state.selectedId = null;
+    animateApp = true;
     render();
   }
 
@@ -1668,26 +1704,54 @@
       });
     }
 
-    window.addEventListener('resize', fitDevice);
+    window.addEventListener('resize', scheduleFit);
+    window.addEventListener('orientationchange', function () {
+      /* Trình duyệt đổi kích thước sau khi xoay xong — đo lại vài nhịp. */
+      scheduleFit();
+      setTimeout(scheduleFit, 120);
+      setTimeout(scheduleFit, 400);
+    });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', scheduleFit);
+    }
+    /* Khi đổi OS, khung máy đổi kích thước có transition 0.3s → đo lại sau đó. */
+    els.device.addEventListener('transitionend', function (e) {
+      if (e.propertyName === 'width' || e.propertyName === 'height') scheduleFit();
+    });
+    if (window.ResizeObserver) {
+      new ResizeObserver(scheduleFit).observe(els.deviceWrap);
+    }
   }
 
+  var fitRaf = 0;
+
+  /* Thu/phóng khung thiết bị sao cho LUÔN hiện trọn trong màn hình,
+     dù người dùng để màn hình dọc hay ngang. */
   function fitDevice() {
     var wrap = els.deviceWrap;
-    if (!wrap) return;
     var dev = els.device;
-    dev.style.transform = 'scale(1)';
-    var availH = wrap.clientHeight - 8;
-    var availW = wrap.clientWidth - 8;
+    if (!wrap || !dev) return;
+
+    /* offsetWidth/Height là kích thước layout thật, không phụ thuộc transform. */
     var h = dev.offsetHeight;
     var w = dev.offsetWidth;
     if (!h || !w) return;
-    var scale = Math.min(1, availH / h, availW / w);
-    if (scale < 1) {
-      dev.style.transform = 'scale(' + scale.toFixed(4) + ')';
-      wrap.style.height = (h * scale + 8) + 'px';
-    } else {
-      wrap.style.height = '';
-    }
+
+    var availH = wrap.clientHeight - 8;
+    var availW = wrap.clientWidth - 8;
+    if (availH <= 0 || availW <= 0) return;
+
+    /* Luôn thu nhỏ để vừa trọn khung; cho phép phóng nhẹ trên màn hình lớn. */
+    var scale = Math.min(1.2, availH / h, availW / w);
+    dev.style.transform = 'scale(' + scale.toFixed(4) + ')';
+  }
+
+  function scheduleFit() {
+    if (fitRaf) cancelAnimationFrame(fitRaf);
+    fitRaf = requestAnimationFrame(function () {
+      fitRaf = 0;
+      fitDevice();
+    });
   }
 
   function startClock() {

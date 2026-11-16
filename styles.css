@@ -1957,3 +1957,277 @@ input, textarea { font: inherit; }
   .stage { padding: 12px 8px 18px; }
   .lab-hint { font-size: 12px; }
 }
+
+/* ============================================================
+   10. BỔ SUNG v2 — ẢNH ĐẠI DIỆN, TAB ANDROID, TÁCH TRANG
+   ============================================================ */
+
+/* ---------- Thẻ chọn OS giờ là thẻ <a> ---------- */
+
+a.os-card {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+a.os-card:focus-visible {
+  outline: 3px solid rgba(11, 87, 208, 0.45);
+  outline-offset: 3px;
+}
+
+/* ---------- Avatar có ảnh: ảnh phủ kín vòng tròn ---------- */
+
+.ios-avatar,
+.md-avatar,
+.ios-detail-avatar,
+.md-detail-avatar,
+.md-form-avatar,
+.avatar-picker-preview {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* ---------- Nút sửa ảnh đại diện trong form ---------- */
+
+.avatar-edit-btn {
+  position: relative;
+  display: inline-block;
+  padding: 0;
+  border-radius: 50%;
+  line-height: 0;
+}
+
+.avatar-edit-btn:active { transform: scale(0.97); }
+
+.avatar-edit-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #007aff;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  border: 2.5px solid #fff;
+  box-shadow: 0 2px 6px rgba(16, 24, 40, 0.28);
+}
+
+.avatar-edit-badge svg { width: 15px; height: 15px; }
+
+.avatar-edit-badge--md {
+  background: var(--md-primary);
+  border-color: #fff;
+  width: 30px;
+  height: 30px;
+}
+
+.avatar-edit-hint {
+  margin: -6px 0 0;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--ios-secondary);
+}
+
+/* ---------- Bộ chọn ảnh đại diện ---------- */
+
+.avatar-picker { padding: 18px 18px 20px; }
+
+.avatar-picker-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 16px;
+}
+
+.avatar-picker-preview {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 32px;
+  font-weight: 500;
+  color: #fff;
+  box-shadow: 0 6px 16px -8px rgba(16, 24, 40, 0.5);
+}
+
+.avatar-picker-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ios-label);
+}
+
+.avatar-picker-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ios-secondary);
+  margin: 4px 0 10px;
+}
+
+.swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 9px;
+  margin-bottom: 18px;
+}
+
+.swatch {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  transition: transform 0.14s;
+}
+
+.swatch:active { transform: scale(0.9); }
+
+.swatch.on {
+  box-shadow: 0 0 0 2.5px #fff, 0 0 0 4.5px currentColor;
+  color: #007aff;
+}
+
+.swatch.on svg { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35)); }
+
+.avatar-picker-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 4px;
+  font-size: 15.5px;
+  color: var(--ios-blue);
+  text-align: left;
+  border-top: 0.5px solid var(--ios-sep);
+}
+
+.avatar-picker-action svg { width: 20px; height: 20px; flex: 0 0 auto; }
+.avatar-picker-action:active { opacity: 0.55; }
+.avatar-picker-action--danger { color: #ff3b30; }
+
+/* Android: bottom sheet cho bộ chọn ảnh */
+
+.sheet-backdrop--md { align-items: flex-end; }
+
+.md-sheet {
+  width: 100%;
+  background: #fff;
+  border-radius: 26px 26px 0 0;
+  padding: 8px 0 14px;
+  animation: sheetUp 0.26s cubic-bezier(0.22, 0.9, 0.24, 1);
+  max-height: 88%;
+  overflow-y: auto;
+}
+
+.md-sheet-handle {
+  width: 34px;
+  height: 4px;
+  border-radius: 999px;
+  background: #d5d8dc;
+  margin: 4px auto 6px;
+}
+
+.avatar-picker--md { padding: 10px 20px 4px; }
+
+.avatar-picker--md .avatar-picker-title { color: var(--md-on-surface); }
+.avatar-picker--md .avatar-picker-label { color: var(--md-on-surface-var); }
+.avatar-picker--md .avatar-picker-action {
+  color: var(--md-primary);
+  border-top: 1px solid #eceff3;
+  font-size: 15px;
+  font-weight: 500;
+}
+.avatar-picker--md .avatar-picker-action--danger { color: #b3261e; }
+.avatar-picker--md .swatch.on { color: var(--md-primary); }
+
+.md-sheet-done {
+  display: block;
+  width: calc(100% - 40px);
+  margin: 10px 20px 0;
+  padding: 13px;
+  border-radius: 999px;
+  background: var(--md-container);
+  color: var(--md-on-container);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.md-sheet-done:active { background: #c2d7fb; }
+
+/* ---------- Android: sao yêu thích, nhật ký ---------- */
+
+.md-icon-btn--star { color: #f2a900; }
+
+.md-row-star {
+  flex: 0 0 auto;
+  color: #f2a900;
+  display: grid;
+  place-items: center;
+}
+
+.md-row-star svg { width: 18px; height: 18px; }
+
+.md-row--recent { align-items: center; }
+
+.md-row-sub--call {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.md-row-sub--call svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  color: #1e8e3e;
+}
+
+.md-recent-time {
+  flex: 0 0 auto;
+  font-size: 12.5px;
+  color: var(--md-on-surface-var);
+  padding-left: 8px;
+}
+
+/* Bottom nav giờ là nút thật */
+
+button.md-navitem {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.16s;
+}
+
+button.md-navitem:active .pill { background: #e6ecf5; }
+
+/* ---------- Trang chọn OS: không cần stage ---------- */
+
+body[data-page="chooser"] { background: #eef1f6; }
+
+@media (max-width: 420px) {
+  .swatch-grid { grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .avatar-picker { padding: 16px 14px 18px; }
+}
+
+/* ---------- Sửa lỗi (v2): tên và dòng phụ phải xếp DỌC, không nằm cạnh nhau ---------- */
+
+.ios-row-name,
+.ios-row-sub,
+.md-row-name,
+.md-row-sub {
+  display: block;
+}
+
+.ios-row-main,
+.md-row-main {
+  display: block;
+}

@@ -1,0 +1,39 @@
+/* ============================================================
+   11. SỬA LỖI v4 — CHỚP TẮT & AUTO SCALE
+   Nạp SAU styles.css và call-message.css để ghi đè, nhờ vậy hai
+   file gốc không phải sửa.
+   ============================================================ */
+
+/* (1) Hiệu ứng mở app chỉ chạy MỘT LẦN. Trước đây .app luôn có
+   animation:appOpen, nên mỗi lần render lại (gõ tìm kiếm, gửi tin)
+   animation phát lại từ opacity 0 → màn hình chớp tắt. */
+.app {
+  animation: none;
+}
+
+.app.is-entering {
+  animation: appOpen 0.28s cubic-bezier(0.22, 0.9, 0.24, 1);
+}
+
+/* (2) Sân khấu khoá đúng chiều cao khung nhìn, không cho tràn. */
+.stage {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.device-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* (3) Màn hình NGANG: thu gọn thanh công cụ để khung máy có tối đa chỗ. */
+@media (orientation: landscape) and (max-height: 620px) {
+  .stage { padding: 8px 12px 10px; }
+  .lab-bar { margin-bottom: 6px; max-width: 100%; }
+  .lab-btn { padding: 6px 11px; font-size: 12px; }
+  .lab-hint { display: none; }
+  .device-wrap { padding: 0; }
+}

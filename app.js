@@ -1,6 +1,8 @@
 /* ============================================================
    MÔ PHỎNG DANH BẠ — iOS & ANDROID
    Toàn bộ dữ liệu lưu trong localStorage của trình duyệt.
+   Trang 1 (index.html): chọn hệ điều hành.
+   Trang 2 (sim.html):    sân khấu mô phỏng thiết bị.
    ============================================================ */
 
 (function () {
@@ -8,15 +10,18 @@
 
   var STORE_KEY = 'danhba.sim.contacts.v1';
   var OS_KEY = 'danhba.sim.os.v1';
+  var RECENT_KEY = 'danhba.sim.recents.v1';
+
+  var PAGE = document.body.getAttribute('data-page');
 
   /* ------------------------------------------------------------
      DỮ LIỆU MẪU
      ------------------------------------------------------------ */
 
   var SEED = [
-    { firstName: 'Minh Anh', lastName: 'Nguyễn', company: 'Trường THCS Nguyễn Du', phones: [{ label: 'di động', value: '0912 345 678' }], emails: [{ label: 'nhà riêng', value: 'minhanh@example.com' }], note: 'Bạn cùng lớp 8A.' },
+    { firstName: 'Minh Anh', lastName: 'Nguyễn', company: 'Trường THCS Nguyễn Du', phones: [{ label: 'di động', value: '0912 345 678' }], emails: [{ label: 'nhà riêng', value: 'minhanh@example.com' }], note: 'Bạn cùng lớp 8A.', favorite: true },
     { firstName: 'Bảo', lastName: 'Trần', company: '', phones: [{ label: 'di động', value: '0987 654 321' }], emails: [], note: '' },
-    { firstName: 'Thu Hà', lastName: 'Lê', company: 'Nhà sách Phương Nam', phones: [{ label: 'di động', value: '0903 111 222' }, { label: 'cơ quan', value: '028 3822 1234' }], emails: [{ label: 'cơ quan', value: 'thuha@example.com' }], note: '' },
+    { firstName: 'Thu Hà', lastName: 'Lê', company: 'Nhà sách Phương Nam', phones: [{ label: 'di động', value: '0903 111 222' }, { label: 'cơ quan', value: '028 3822 1234' }], emails: [{ label: 'cơ quan', value: 'thuha@example.com' }], note: '', favorite: true },
     { firstName: 'Quốc Huy', lastName: 'Phạm', company: '', phones: [{ label: 'di động', value: '0938 777 888' }], emails: [], note: 'Đội bóng rổ của trường.' },
     { firstName: 'Khánh Linh', lastName: 'Võ', company: '', phones: [{ label: 'di động', value: '0977 222 333' }], emails: [{ label: 'di động', value: 'khanhlinh@example.com' }], note: '' },
     { firstName: 'Tuấn Kiệt', lastName: 'Đặng', company: 'Cửa hàng xe đạp An Bình', phones: [{ label: 'cơ quan', value: '028 3999 5555' }], emails: [], note: '' },
@@ -25,7 +30,7 @@
     { firstName: 'Thanh Mai', lastName: 'Đỗ', company: 'Phòng khám Hòa Bình', phones: [{ label: 'cơ quan', value: '028 3777 8888' }], emails: [{ label: 'cơ quan', value: 'thanhmai@example.com' }], note: '' },
     { firstName: 'Hải Nam', lastName: 'Ngô', company: '', phones: [{ label: 'di động', value: '0909 888 777' }], emails: [], note: '' },
     { firstName: 'Phương Thảo', lastName: 'Trịnh', company: '', phones: [{ label: 'di động', value: '0932 555 666' }], emails: [], note: 'Học nhóm môn Toán.' },
-    { firstName: 'Đức Thành', lastName: 'Lý', company: 'Trường THCS Nguyễn Du', phones: [{ label: 'cơ quan', value: '028 3811 2233' }], emails: [], note: 'Thầy giáo chủ nhiệm.' }
+    { firstName: 'Đức Thành', lastName: 'Lý', company: 'Trường THCS Nguyễn Du', phones: [{ label: 'cơ quan', value: '028 3811 2233' }], emails: [], note: 'Thầy giáo chủ nhiệm.', favorite: true }
   ];
 
   /* ------------------------------------------------------------
@@ -35,7 +40,9 @@
   var state = {
     os: 'ios',
     contacts: [],
+    recents: [],
     screen: 'home',
+    tab: 'contacts',
     selectedId: null,
     query: '',
     form: null,
@@ -108,12 +115,42 @@
     ['#64b5f6', '#1565c0']
   ];
 
+  /* Bảng màu phẳng cho bộ chọn ảnh đại diện (kiểu Danh bạ iOS) */
+  var AVATAR_COLORS = [
+    '#e57373', '#f06292', '#ba68c8', '#9575cd',
+    '#7986cb', '#64b5f6', '#4fc3f7', '#4db6ac',
+    '#81c784', '#aed581', '#ffd54f', '#ffb74d',
+    '#ff8a65', '#a1887f', '#90a4ae', '#546e7a'
+  ];
+
   function avatarGradient(c) {
     var key = sortName(c) || displayName(c);
     var h = 0;
     for (var i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) % 9973;
     var p = PALETTE[h % PALETTE.length];
     return 'linear-gradient(150deg,' + p[0] + ' 0%,' + p[1] + ' 100%)';
+  }
+
+  /* Trả về style nền cho avatar: ảnh tải lên > màu đã chọn > gradient theo tên */
+  function avatarStyle(c) {
+    var a = c && c.avatar;
+    if (a && a.kind === 'photo' && a.value) {
+      return 'background-image:url(' + a.value + ');background-size:cover;background-position:center;background-repeat:no-repeat';
+    }
+    if (a && a.kind === 'color' && a.value) {
+      return 'background:' + a.value;
+    }
+    return 'background:' + avatarGradient(c);
+  }
+
+  function avatarText(c) {
+    var a = c && c.avatar;
+    if (a && a.kind === 'photo' && a.value) return '';
+    return esc(initials(c));
+  }
+
+  function avatarHTML(c, cls) {
+    return '<span class="' + cls + '" style="' + avatarStyle(c) + '">' + avatarText(c) + '</span>';
   }
 
   function groupLetter(c) {
@@ -141,6 +178,10 @@
       ].join(' ');
       return stripDiacritics(hay).toLowerCase().indexOf(q) !== -1;
     });
+  }
+
+  function favoriteContacts() {
+    return sortedContacts().filter(function (c) { return !!c.favorite; });
   }
 
   function groupList(list) {
@@ -177,6 +218,28 @@
     return days[d.getDay()] + ', ' + d.getDate() + ' tháng ' + (d.getMonth() + 1);
   }
 
+  function timeOf(ts) {
+    var d = new Date(ts);
+    var h = d.getHours();
+    var m = d.getMinutes();
+    return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+  }
+
+  function dayKey(ts) {
+    var d = new Date(ts);
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+
+  function dayLabel(ts) {
+    var d = new Date(ts);
+    var now = new Date();
+    var k = dayKey(ts);
+    if (k === dayKey(now.getTime())) return 'Hôm nay';
+    var y = new Date(now.getTime() - 86400000);
+    if (k === dayKey(y.getTime())) return 'Hôm qua';
+    return d.getDate() + ' tháng ' + (d.getMonth() + 1) + ', ' + d.getFullYear();
+  }
+
   /* ------------------------------------------------------------
      LƯU TRỮ
      ------------------------------------------------------------ */
@@ -188,6 +251,7 @@
         var parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
           state.contacts = parsed.map(normalizeContact);
+          loadRecents();
           return;
         }
       }
@@ -198,9 +262,14 @@
       return n;
     });
     save();
+    loadRecents();
   }
 
   function normalizeContact(c) {
+    var av = null;
+    if (c.avatar && (c.avatar.kind === 'photo' || c.avatar.kind === 'color') && c.avatar.value) {
+      av = { kind: c.avatar.kind, value: c.avatar.value };
+    }
     return {
       id: c.id || uid(),
       firstName: c.firstName || '',
@@ -208,13 +277,32 @@
       company: c.company || '',
       phones: Array.isArray(c.phones) ? c.phones.map(function (p) { return { label: p.label || 'di động', value: p.value || '' }; }) : [],
       emails: Array.isArray(c.emails) ? c.emails.map(function (e) { return { label: e.label || 'nhà riêng', value: e.value || '' }; }) : [],
-      note: c.note || ''
+      note: c.note || '',
+      favorite: !!c.favorite,
+      avatar: av
     };
   }
 
   function save() {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(state.contacts));
+    } catch (e) { /* bỏ qua */ }
+  }
+
+  function loadRecents() {
+    try {
+      var raw = localStorage.getItem(RECENT_KEY);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) { state.recents = parsed; return; }
+      }
+    } catch (e) { /* bỏ qua */ }
+    state.recents = [];
+  }
+
+  function saveRecents() {
+    try {
+      localStorage.setItem(RECENT_KEY, JSON.stringify(state.recents.slice(0, 120)));
     } catch (e) { /* bỏ qua */ }
   }
 
@@ -249,10 +337,13 @@
     person: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c.6-3.6 3.7-5.6 7.5-5.6s6.9 2 7.5 5.6"/></svg>',
     contacts: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="4" y="3" width="16" height="18" rx="3"/><circle cx="12" cy="10" r="2.6"/><path d="M7.8 17.4c.5-2 2.2-3.1 4.2-3.1s3.7 1.1 4.2 3.1"/></svg>',
     star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 4l2.5 5.2 5.5.8-4 3.9 1 5.6-5-2.7-5 2.7 1-5.6-4-3.9 5.5-.8z"/></svg>',
+    starFill: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3.6l2.7 5.5 6 .9-4.3 4.2 1 6-5.4-2.9-5.4 2.9 1-6L3.3 10l6-.9z"/></svg>',
     history: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
     close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     building: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 8h2M13 8h2M9 12h2M13 12h2M9 16h6"/></svg>',
-    note: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h5"/></svg>'
+    note: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h5"/></svg>',
+    camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.2l1.1-1.6h6.4L16.3 6h1.2A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-8z"/><circle cx="12" cy="12.4" r="3.4"/></svg>',
+    callIn: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.5.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.2.2 2.4.6 3.5.1.4 0 .8-.2 1l-2.3 2.3z"/></svg>'
   };
 
   function statusBar(os) {
@@ -360,7 +451,7 @@
         body += '<div class="ios-section-head" data-letter="' + g.letter + '">' + g.letter + '</div>';
         g.items.forEach(function (c) {
           body += '<button class="ios-row" type="button" data-action="open-detail" data-id="' + c.id + '">' +
-            '<span class="ios-avatar" style="background:' + avatarGradient(c) + '">' + esc(initials(c)) + '</span>' +
+            avatarHTML(c, 'ios-avatar') +
             '<span class="ios-row-main">' +
               '<span class="ios-row-name">' + esc(displayName(c)) + '</span>' +
               (c.company ? '<span class="ios-row-sub">' + esc(c.company) + '</span>' : '') +
@@ -449,7 +540,7 @@
       '<div class="app-body">' +
         '<div class="ios-detail">' +
           '<div class="ios-detail-head">' +
-            '<div class="ios-detail-avatar" style="background:' + avatarGradient(c) + '">' + esc(initials(c)) + '</div>' +
+            '<div class="ios-detail-avatar" style="' + avatarStyle(c) + '">' + avatarText(c) + '</div>' +
             '<div class="ios-detail-name">' + esc(displayName(c)) + '</div>' +
             (c.company ? '<div class="ios-detail-org">' + esc(c.company) + '</div>' : '') +
             '<div class="ios-actions">' +
@@ -492,6 +583,8 @@
       '</div>';
     }).join('');
 
+    var draftForAvatar = { firstName: d.firstName, lastName: d.lastName, company: d.company, avatar: d.avatar };
+
     return '<div class="app" data-os="ios">' +
       statusBar('ios') +
       iosNav({
@@ -502,10 +595,12 @@
       '<div class="app-body">' +
         '<div class="ios-form">' +
           '<div class="ios-form-card" style="display:flex;justify-content:center;padding:18px 0">' +
-            '<div class="ios-detail-avatar" style="width:80px;height:80px;font-size:32px;margin:0;background:' + avatarGradient({ firstName: d.firstName, lastName: d.lastName, company: d.company }) + '">' +
-              esc(initials({ firstName: d.firstName, lastName: d.lastName, company: d.company })) +
-            '</div>' +
+            '<button class="avatar-edit-btn" type="button" data-action="pick-avatar" aria-label="Chọn ảnh đại diện">' +
+              '<span class="ios-detail-avatar" style="width:80px;height:80px;font-size:32px;margin:0;' + avatarStyle(draftForAvatar) + '">' + avatarText(draftForAvatar) + '</span>' +
+              '<span class="avatar-edit-badge">' + ICON.camera + '</span>' +
+            '</button>' +
           '</div>' +
+          '<p class="avatar-edit-hint">Chạm vào ảnh để chọn màu hoặc tải ảnh lên</p>' +
 
           '<div class="ios-form-card">' +
             '<div class="ios-field"><span class="ios-field-label">Họ</span><input type="text" data-field="lastName" value="' + esc(d.lastName) + '" placeholder="Họ và tên đệm" autocomplete="off" /></div>' +
@@ -538,7 +633,7 @@
   }
 
   /* ------------------------------------------------------------
-     ANDROID — DANH SÁCH
+     ANDROID — APP BAR
      ------------------------------------------------------------ */
 
   function mdAppBar(opts) {
@@ -551,6 +646,22 @@
       (opts.below || '') +
     '</div>';
   }
+
+  function mdBottomNav(active) {
+    function item(key, icon, label) {
+      return '<button class="md-navitem' + (active === key ? ' active' : '') + '" type="button" data-action="tab" data-tab="' + key + '">' +
+        '<span class="pill">' + icon + '</span><span>' + label + '</span></button>';
+    }
+    return '<div class="md-bottomnav">' +
+      item('contacts', ICON.contacts, 'Danh bạ') +
+      item('favorites', ICON.star, 'Yêu thích') +
+      item('recents', ICON.history, 'Nhật ký') +
+    '</div>';
+  }
+
+  /* ------------------------------------------------------------
+     ANDROID — DANH SÁCH
+     ------------------------------------------------------------ */
 
   function renderAndroidList() {
     var list = filteredContacts();
@@ -568,7 +679,7 @@
         g.items.forEach(function (c) {
           var sub = (c.phones && c.phones[0] && c.phones[0].value) || c.company || '';
           body += '<button class="md-row" type="button" data-action="open-detail" data-id="' + c.id + '">' +
-            '<span class="md-avatar" style="background:' + avatarGradient(c) + '">' + esc(initials(c)) + '</span>' +
+            avatarHTML(c, 'md-avatar') +
             '<span class="md-row-main">' +
               '<span class="md-row-name">' + esc(displayName(c)) + '</span>' +
               (sub ? '<span class="md-row-sub">' + esc(sub) + '</span>' : '') +
@@ -595,11 +706,97 @@
       '<div class="app-body">' +
         '<div class="md-scroll" id="md-scroll">' + body + '</div>' +
         '<button class="md-fab" type="button" data-action="new-contact" aria-label="Thêm liên hệ">' + ICON.plus + '</button>' +
-        '<div class="md-bottomnav">' +
-          '<div class="md-navitem active"><span class="pill">' + ICON.contacts + '</span><span>Danh bạ</span></div>' +
-          '<div class="md-navitem"><span class="pill">' + ICON.star + '</span><span>Yêu thích</span></div>' +
-          '<div class="md-navitem"><span class="pill">' + ICON.history + '</span><span>Nhật ký</span></div>' +
-        '</div>' +
+        mdBottomNav('contacts') +
+      '</div>' +
+    '</div>';
+  }
+
+  /* ------------------------------------------------------------
+     ANDROID — YÊU THÍCH
+     ------------------------------------------------------------ */
+
+  function renderAndroidFavorites() {
+    var list = favoriteContacts();
+
+    var body = '';
+    if (!list.length) {
+      body = '<div class="md-empty">' +
+        '<div class="me-title">Chưa có liên hệ yêu thích</div>' +
+        '<div class="me-sub">Mở một liên hệ rồi nhấn ngôi sao ☆ trên thanh trên cùng để thêm vào Yêu thích.</div>' +
+      '</div>';
+    } else {
+      body += '<div class="md-section-head">' + list.length + ' liên hệ yêu thích</div>';
+      list.forEach(function (c) {
+        var sub = (c.phones && c.phones[0] && c.phones[0].value) || c.company || '';
+        body += '<button class="md-row" type="button" data-action="open-detail" data-id="' + c.id + '">' +
+          avatarHTML(c, 'md-avatar') +
+          '<span class="md-row-main">' +
+            '<span class="md-row-name">' + esc(displayName(c)) + '</span>' +
+            (sub ? '<span class="md-row-sub">' + esc(sub) + '</span>' : '') +
+          '</span>' +
+          '<span class="md-row-star">' + ICON.starFill + '</span>' +
+        '</button>';
+      });
+    }
+
+    return '<div class="app" data-os="android">' +
+      statusBar('android') +
+      mdAppBar({
+        title: 'Yêu thích',
+        actions: '<button class="md-icon-btn" type="button" data-action="noop" aria-label="Tuỳ chọn khác">' + ICON.more + '</button>'
+      }) +
+      '<div class="app-body">' +
+        '<div class="md-scroll" id="md-scroll">' + body + '</div>' +
+        '<button class="md-fab" type="button" data-action="new-contact" aria-label="Thêm liên hệ">' + ICON.plus + '</button>' +
+        mdBottomNav('favorites') +
+      '</div>' +
+    '</div>';
+  }
+
+  /* ------------------------------------------------------------
+     ANDROID — NHẬT KÝ (lịch sử cuộc gọi)
+     ------------------------------------------------------------ */
+
+  function renderAndroidRecents() {
+    var items = state.recents.slice().sort(function (a, b) { return b.at - a.at; });
+
+    var body = '';
+    if (!items.length) {
+      body = '<div class="md-empty">' +
+        '<div class="me-title">Nhật ký trống</div>' +
+        '<div class="me-sub">Các cuộc gọi bạn thực hiện trong mô phỏng sẽ được ghi lại ở đây.</div>' +
+      '</div>';
+    } else {
+      var lastDay = null;
+      items.forEach(function (r) {
+        var k = dayKey(r.at);
+        if (k !== lastDay) {
+          lastDay = k;
+          body += '<div class="md-section-head">' + esc(dayLabel(r.at)) + '</div>';
+        }
+        var c = r.contactId ? getContact(r.contactId) : null;
+        var av = c ? avatarHTML(c, 'md-avatar') : '<span class="md-avatar" style="background:#90a4ae">' + esc((r.name || '?').charAt(0).toUpperCase()) + '</span>';
+        body += '<button class="md-row md-row--recent" type="button" ' + (c ? 'data-action="open-detail" data-id="' + c.id + '"' : 'data-action="noop"') + '>' +
+          av +
+          '<span class="md-row-main">' +
+            '<span class="md-row-name">' + esc(r.name || 'Không rõ') + '</span>' +
+            '<span class="md-row-sub md-row-sub--call">' + ICON.callIn + '<span>' + esc(r.phone || '') + '</span></span>' +
+          '</span>' +
+          '<span class="md-recent-time">' + timeOf(r.at) + '</span>' +
+        '</button>';
+      });
+    }
+
+    return '<div class="app" data-os="android">' +
+      statusBar('android') +
+      mdAppBar({
+        title: 'Nhật ký',
+        actions: (items.length ? '<button class="md-icon-btn" type="button" data-action="clear-recents" aria-label="Xoá nhật ký">' + ICON.trash + '</button>' : '') +
+                 '<button class="md-icon-btn" type="button" data-action="noop" aria-label="Tuỳ chọn khác">' + ICON.more + '</button>'
+      }) +
+      '<div class="app-body">' +
+        '<div class="md-scroll" id="md-scroll">' + body + '</div>' +
+        mdBottomNav('recents') +
       '</div>' +
     '</div>';
   }
@@ -665,16 +862,17 @@
       mdAppBar({
         title: '',
         back: true,
-        actions: '<button class="md-icon-btn" type="button" data-action="toggle-menu" aria-label="Tuỳ chọn">' + ICON.more + '</button>'
+        actions: '<button class="md-icon-btn' + (c.favorite ? ' md-icon-btn--star' : '') + '" type="button" data-action="toggle-favorite" aria-label="Yêu thích">' + (c.favorite ? ICON.starFill : ICON.star) + '</button>' +
+                 '<button class="md-icon-btn" type="button" data-action="toggle-menu" aria-label="Tuỳ chọn">' + ICON.more + '</button>'
       }) +
       '<div class="app-body">' +
         '<div class="md-detail">' +
           '<div class="md-detail-head">' +
-            '<div class="md-detail-avatar" style="background:' + avatarGradient(c) + '">' + esc(initials(c)) + '</div>' +
+            '<div class="md-detail-avatar" style="' + avatarStyle(c) + '">' + avatarText(c) + '</div>' +
             '<div class="md-detail-name">' + esc(displayName(c)) + '</div>' +
             (c.company ? '<div class="md-detail-org">' + esc(c.company) + '</div>' : '') +
             '<div class="md-actions">' +
-              '<button class="md-action" type="button" data-action="noop">' + ICON.phone + '<span>Gọi</span></button>' +
+              '<button class="md-action" type="button" data-action="call-contact">' + ICON.phone + '<span>Gọi</span></button>' +
               '<button class="md-action" type="button" data-action="noop">' + ICON.message + '<span>Nhắn tin</span></button>' +
               '<button class="md-action" type="button" data-action="noop">' + ICON.video + '<span>Video</span></button>' +
               '<button class="md-action" type="button" data-action="noop">' + ICON.mail + '<span>Email</span></button>' +
@@ -720,6 +918,8 @@
       '</div>';
     }).join('');
 
+    var draftForAvatar = { firstName: d.firstName, lastName: d.lastName, company: d.company, avatar: d.avatar };
+
     return '<div class="app" data-os="android">' +
       statusBar('android') +
       mdAppBar({
@@ -730,10 +930,11 @@
       '<div class="app-body">' +
         '<div class="md-form">' +
           '<div class="md-form-head">' +
-            '<div class="md-form-avatar" style="background:' + avatarGradient({ firstName: d.firstName, lastName: d.lastName, company: d.company }) + '">' +
-              esc(initials({ firstName: d.firstName, lastName: d.lastName, company: d.company })) +
-            '</div>' +
-            '<div class="md-form-avatar-hint">Thêm ảnh</div>' +
+            '<button class="avatar-edit-btn" type="button" data-action="pick-avatar" aria-label="Chọn ảnh đại diện">' +
+              '<span class="md-form-avatar" style="' + avatarStyle(draftForAvatar) + '">' + avatarText(draftForAvatar) + '</span>' +
+              '<span class="avatar-edit-badge avatar-edit-badge--md">' + ICON.camera + '</span>' +
+            '</button>' +
+            '<div class="md-form-avatar-hint">Chạm để thêm ảnh</div>' +
           '</div>' +
 
           '<div class="md-field">' +
@@ -785,12 +986,63 @@
   }
 
   /* ------------------------------------------------------------
+     BỘ CHỌN ẢNH ĐẠI DIỆN
+     ------------------------------------------------------------ */
+
+  function renderAvatarPicker() {
+    var d = state.form.draft;
+    var draftForAvatar = { firstName: d.firstName, lastName: d.lastName, company: d.company, avatar: d.avatar };
+    var isIOS = state.os === 'ios';
+
+    var swatches = AVATAR_COLORS.map(function (col) {
+      var on = d.avatar && d.avatar.kind === 'color' && d.avatar.value === col;
+      return '<button class="swatch' + (on ? ' on' : '') + '" type="button" data-action="pick-color" data-color="' + col + '" style="background:' + col + '" aria-label="Màu ' + col + '">' +
+        (on ? '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>' : '') +
+      '</button>';
+    }).join('');
+
+    var inner =
+      '<div class="avatar-picker-head">' +
+        '<div class="avatar-picker-preview" style="' + avatarStyle(draftForAvatar) + '">' + avatarText(draftForAvatar) + '</div>' +
+        '<div class="avatar-picker-title">Ảnh đại diện</div>' +
+      '</div>' +
+      '<div class="avatar-picker-label">Chọn màu</div>' +
+      '<div class="swatch-grid">' + swatches + '</div>' +
+      '<div class="avatar-picker-label">Hoặc dùng ảnh từ máy</div>' +
+      '<button class="avatar-picker-action" type="button" data-action="upload-avatar">' + ICON.camera + '<span>Tải ảnh lên từ máy</span></button>' +
+      (d.avatar ? '<button class="avatar-picker-action avatar-picker-action--danger" type="button" data-action="clear-avatar">' + ICON.trash + '<span>Bỏ ảnh đại diện</span></button>' : '');
+
+    if (isIOS) {
+      return '<div class="sheet-backdrop" data-action="close-overlay">' +
+        '<div class="ios-sheet" data-stop="1">' +
+          '<div class="ios-sheet-group avatar-picker">' + inner + '</div>' +
+          '<div class="ios-sheet-group">' +
+            '<button class="ios-sheet-btn ios-sheet-btn--bold" type="button" data-action="close-overlay">Xong</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    return '<div class="sheet-backdrop sheet-backdrop--md" data-action="close-overlay">' +
+      '<div class="md-sheet" data-stop="1">' +
+        '<div class="md-sheet-handle"></div>' +
+        '<div class="avatar-picker avatar-picker--md">' + inner + '</div>' +
+        '<button class="md-sheet-done" type="button" data-action="close-overlay">Xong</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  /* ------------------------------------------------------------
      LỚP PHỦ (SHEET / ALERT / MENU / SNACKBAR)
      ------------------------------------------------------------ */
 
   function renderOverlay() {
     var o = state.overlay;
     var html = '';
+
+    if (o && o.type === 'avatar') {
+      html += renderAvatarPicker();
+    }
 
     if (o && o.type === 'ios-sheet') {
       html += '<div class="sheet-backdrop" data-action="close-overlay">' +
@@ -837,9 +1089,11 @@
     }
 
     if (o && o.type === 'md-menu') {
+      var c = getContact(state.selectedId);
       html += '<div class="sheet-backdrop" style="background:rgba(0,0,0,0.18);align-items:flex-start;justify-content:flex-end;padding:56px 12px 0 0" data-action="close-overlay">' +
         '<div class="md-menu" data-stop="1">' +
           '<button type="button" data-action="edit-contact">' + ICON.edit + '<span>Sửa</span></button>' +
+          '<button type="button" data-action="toggle-favorite">' + (c && c.favorite ? ICON.starFill : ICON.star) + '<span>' + (c && c.favorite ? 'Bỏ yêu thích' : 'Thêm vào Yêu thích') + '</span></button>' +
           '<button type="button" data-action="noop">' + ICON.share + '<span>Chia sẻ</span></button>' +
           '<button type="button" class="danger" data-action="delete-contact">' + ICON.trash + '<span>Xoá</span></button>' +
         '</div>' +
@@ -869,7 +1123,11 @@
       else if (state.screen === 'detail') html = renderIOSDetail();
       else if (state.screen === 'form') html = renderIOSForm();
     } else {
-      if (state.screen === 'list') html = renderAndroidList();
+      if (state.screen === 'list') {
+        if (state.tab === 'favorites') html = renderAndroidFavorites();
+        else if (state.tab === 'recents') html = renderAndroidRecents();
+        else html = renderAndroidList();
+      }
       else if (state.screen === 'detail') html = renderAndroidDetail();
       else if (state.screen === 'form') html = renderAndroidForm();
     }
@@ -921,6 +1179,7 @@
 
   function openContacts() {
     state.screen = 'list';
+    state.tab = 'contacts';
     state.query = '';
     state.selectedId = null;
     render();
@@ -950,7 +1209,7 @@
     state.form = {
       mode: 'new',
       id: null,
-      draft: { firstName: '', lastName: '', company: '', phones: [{ label: 'di động', value: '' }], emails: [], note: '' }
+      draft: { firstName: '', lastName: '', company: '', phones: [{ label: 'di động', value: '' }], emails: [], note: '', avatar: null }
     };
     state.screen = 'form';
     render();
@@ -971,7 +1230,8 @@
         company: c.company,
         phones: c.phones.length ? c.phones.map(function (p) { return { label: p.label, value: p.value }; }) : [{ label: 'di động', value: '' }],
         emails: c.emails.map(function (e) { return { label: e.label, value: e.value }; }),
-        note: c.note
+        note: c.note,
+        avatar: c.avatar ? { kind: c.avatar.kind, value: c.avatar.value } : null
       }
     };
     state.screen = 'form';
@@ -995,7 +1255,8 @@
       company: d.company.trim(),
       phones: d.phones.filter(function (p) { return p.value.trim(); }).map(function (p) { return { label: p.label, value: p.value.trim() }; }),
       emails: d.emails.filter(function (e) { return e.value.trim(); }).map(function (e) { return { label: e.label, value: e.value.trim() }; }),
-      note: d.note.trim()
+      note: d.note.trim(),
+      avatar: d.avatar ? { kind: d.avatar.kind, value: d.avatar.value } : null
     };
 
     if (f.mode === 'new') {
@@ -1017,6 +1278,7 @@
         target.phones = payload.phones;
         target.emails = payload.emails;
         target.note = payload.note;
+        target.avatar = payload.avatar;
         save();
       }
       state.form = null;
@@ -1105,6 +1367,63 @@
     render();
   }
 
+  function logCall(c, phone) {
+    if (!c) return;
+    state.recents.unshift({
+      id: 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      contactId: c.id,
+      name: displayName(c),
+      phone: phone || ((c.phones[0] || {}).value || ''),
+      at: Date.now(),
+      type: 'call'
+    });
+    saveRecents();
+  }
+
+  function callContact() {
+    var c = getContact(state.selectedId);
+    if (!c) return;
+    var phone = (c.phones[0] || {}).value || '';
+    if (!phone) {
+      showToast('Liên hệ này chưa có số điện thoại.');
+      return;
+    }
+    logCall(c, phone);
+    render();
+    showToast('Mô phỏng: đã ghi cuộc gọi vào Nhật ký.');
+  }
+
+  function toggleFavorite() {
+    var c = getContact(state.selectedId);
+    if (!c) return;
+    c.favorite = !c.favorite;
+    save();
+    state.overlay = null;
+    render();
+    showToast(c.favorite ? 'Đã thêm vào Yêu thích' : 'Đã bỏ khỏi Yêu thích');
+  }
+
+  function clearRecents() {
+    state.overlay = {
+      type: 'md-dialog',
+      title: 'Xoá nhật ký?',
+      message: 'Toàn bộ lịch sử cuộc gọi trong mô phỏng sẽ bị xoá.',
+      cancelLabel: 'Huỷ',
+      confirmLabel: 'Xoá',
+      danger: true,
+      onConfirm: 'clear-recents'
+    };
+    render();
+  }
+
+  function doClearRecents() {
+    state.recents = [];
+    saveRecents();
+    state.overlay = null;
+    render();
+    showToast('Đã xoá nhật ký');
+  }
+
   function jumpTo(letter) {
     var el = els.screen.querySelector('[data-letter="' + letter + '"]');
     if (el) el.scrollIntoView({ block: 'start' });
@@ -1139,12 +1458,75 @@
       return n;
     });
     save();
+    state.recents = [];
+    saveRecents();
     state.overlay = null;
     state.screen = 'home';
+    state.tab = 'contacts';
     state.selectedId = null;
     state.query = '';
     render();
     showToast('Đã đặt lại dữ liệu mẫu');
+  }
+
+  /* ------------------------------------------------------------
+     ẢNH ĐẠI DIỆN — chọn màu / tải ảnh
+     ------------------------------------------------------------ */
+
+  function openAvatarPicker() {
+    if (!state.form) return;
+    state.overlay = { type: 'avatar' };
+    render();
+  }
+
+  function pickColor(col) {
+    if (!state.form) return;
+    state.form.draft.avatar = { kind: 'color', value: col };
+    render();
+  }
+
+  function clearAvatar() {
+    if (!state.form) return;
+    state.form.draft.avatar = null;
+    render();
+  }
+
+  function triggerUpload() {
+    var input = document.getElementById('avatar-file');
+    if (!input) return;
+    input.value = '';
+    input.click();
+  }
+
+  function readImageFile(file, cb) {
+    if (!file || !/^image\//.test(file.type)) {
+      showToast('Vui lòng chọn một tệp ảnh.');
+      return;
+    }
+    var reader = new FileReader();
+    reader.onerror = function () { showToast('Không đọc được tệp ảnh.'); };
+    reader.onload = function () {
+      var img = new Image();
+      img.onerror = function () { showToast('Tệp ảnh không hợp lệ.'); };
+      img.onload = function () {
+        try {
+          var w = img.naturalWidth || img.width;
+          var h = img.naturalHeight || img.height;
+          var side = Math.min(w, h);
+          var out = Math.min(320, side);
+          var cv = document.createElement('canvas');
+          cv.width = out;
+          cv.height = out;
+          var ctx = cv.getContext('2d');
+          ctx.drawImage(img, (w - side) / 2, (h - side) / 2, side, side, 0, 0, out, out);
+          cb(cv.toDataURL('image/jpeg', 0.85));
+        } catch (e) {
+          showToast('Không xử lý được ảnh này.');
+        }
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
   }
 
   /* ------------------------------------------------------------
@@ -1171,18 +1553,37 @@
       case 'delete-contact': askDelete(); break;
       case 'alert-confirm':
         if (state.overlay && state.overlay.onConfirm === 'reset') doReset();
+        else if (state.overlay && state.overlay.onConfirm === 'clear-recents') doClearRecents();
         else doDelete();
         break;
       case 'close-overlay':
         state.overlay = null;
         render();
         break;
-      case 'sheet-pick':
+      case 'sheet-pick': {
+        var idx = +el.getAttribute('data-index');
+        var c0 = getContact(state.selectedId);
         state.overlay = null;
-        render();
-        showToast('Đây là mô phỏng — chức năng gọi chưa được bật.');
+        if (idx === 0 && c0) {
+          logCall(c0, (c0.phones[0] || {}).value || '');
+          render();
+          showToast('Mô phỏng: đã ghi cuộc gọi vào Nhật ký.');
+        } else {
+          render();
+          showToast('Đây là mô phỏng — chức năng này chưa được bật.');
+        }
         break;
+      }
       case 'call-sheet': callSheet(el.getAttribute('data-value')); break;
+      case 'call-contact': callContact(); break;
+      case 'toggle-favorite': toggleFavorite(); break;
+      case 'clear-recents': clearRecents(); break;
+      case 'tab':
+        state.tab = el.getAttribute('data-tab');
+        state.query = '';
+        state.screen = 'list';
+        render();
+        break;
       case 'clear-search':
         state.query = '';
         render();
@@ -1220,6 +1621,10 @@
         if (s) s.focus();
         break;
       }
+      case 'pick-avatar': openAvatarPicker(); break;
+      case 'pick-color': pickColor(el.getAttribute('data-color')); break;
+      case 'clear-avatar': clearAvatar(); break;
+      case 'upload-avatar': triggerUpload(); break;
       case 'noop':
         showToast('Đây là mô phỏng — chức năng này chưa được bật.');
         break;
@@ -1240,54 +1645,35 @@
       var stop = e.target.closest('[data-stop]');
       var target = e.target.closest('[data-action]');
       if (!target) return;
-      if (stop && target.getAttribute('data-action') === 'close-overlay') return;
+      /* Bấm ra vùng nền (ngoài khối data-stop) thì bỏ qua, để lớp phủ tự đóng. */
+      if (stop && !stop.contains(target)) return;
       var action = target.getAttribute('data-action');
       if (action === 'noop') { e.preventDefault(); }
       handleAction(action, target);
     });
 
-    document.getElementById('btn-switch-os').addEventListener('click', function () {
-      state.screen = 'home';
-      state.overlay = null;
-      state.form = null;
-      state.selectedId = null;
-      state.query = '';
-      showChooser();
-    });
-
     document.getElementById('btn-reset').addEventListener('click', resetData);
 
-    document.querySelectorAll('.os-card').forEach(function (card) {
-      card.addEventListener('click', function () {
-        var os = card.getAttribute('data-os');
-        state.os = os;
-        saveOS(os);
-        state.screen = 'home';
-        state.overlay = null;
-        state.form = null;
-        state.selectedId = null;
-        state.query = '';
-        showStage();
+    var fileInput = document.getElementById('avatar-file');
+    if (fileInput) {
+      fileInput.addEventListener('change', function () {
+        var file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+        readImageFile(file, function (dataUrl) {
+          if (!state.form) return;
+          state.form.draft.avatar = { kind: 'photo', value: dataUrl };
+          render();
+          showToast('Đã thêm ảnh đại diện');
+        });
       });
-    });
+    }
 
     window.addEventListener('resize', fitDevice);
   }
 
-  function showChooser() {
-    document.getElementById('chooser').hidden = false;
-    document.getElementById('stage').hidden = true;
-  }
-
-  function showStage() {
-    document.getElementById('chooser').hidden = true;
-    document.getElementById('stage').hidden = false;
-    render();
-  }
-
   function fitDevice() {
     var wrap = els.deviceWrap;
-    if (!wrap || document.getElementById('stage').hidden) return;
+    if (!wrap) return;
     var dev = els.device;
     dev.style.transform = 'scale(1)';
     var availH = wrap.clientHeight - 8;
@@ -1318,7 +1704,7 @@
      KHỞI TẠO
      ------------------------------------------------------------ */
 
-  function init() {
+  function initSim() {
     els.screen = document.getElementById('screen');
     els.device = document.getElementById('device');
     els.deviceWrap = document.getElementById('device-wrap');
@@ -1329,17 +1715,33 @@
     els.toast = document.getElementById('toast');
 
     load();
-    var savedOS = loadOS();
-    if (savedOS) state.os = savedOS;
+
+    var params = new URLSearchParams(window.location.search);
+    var qos = params.get('os');
+    if (qos === 'ios' || qos === 'android') {
+      state.os = qos;
+      saveOS(qos);
+    } else {
+      var savedOS = loadOS();
+      if (savedOS) state.os = savedOS;
+    }
 
     bindGlobal();
     startClock();
+    render();
+  }
 
-    if (savedOS) {
-      showStage();
-    } else {
-      showChooser();
+  function init() {
+    if (PAGE === 'sim') {
+      initSim();
+      return;
     }
+    /* Trang chọn hệ điều hành: chỉ cần ghi nhớ lựa chọn khi bấm thẻ. */
+    document.querySelectorAll('.os-card').forEach(function (card) {
+      card.addEventListener('click', function () {
+        saveOS(card.getAttribute('data-os'));
+      });
+    });
   }
 
   if (document.readyState === 'loading') {

@@ -30,6 +30,11 @@ body[data-page="sim"] .stage {
   inset: 0;
   z-index: 30;
   overflow: hidden;
+}
+
+/* Hiệu ứng chỉ chạy khi MỞ màn hình gọi, không phát lại mỗi lần bấm nút
+   (tắt tiếng / bàn phím / phím số) — trước đây gây chớp tắt. */
+.call.is-entering {
   animation: callIn 0.26s cubic-bezier(0.22, 0.9, 0.24, 1);
 }
 

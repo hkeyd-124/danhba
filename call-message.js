@@ -251,7 +251,10 @@
 
   /* ---------------- màn hình gọi ---------------- */
 
-  function startCall(contactId, phone) {
+  /* skipLog: nút Gọi của Android do app.js xử lý luôn (xem listener bên dưới) và
+     app.js đã tự ghi nhật ký, nên ở đây không ghi nữa — ghi cả hai thì mỗi cuộc
+     gọi thành 2 dòng trong Nhật ký. */
+  function startCall(contactId, phone, skipLog) {
     var c = getContact(contactId);
     if (!c) return;
     var num = phone || ((c.phones && c.phones[0] && c.phones[0].value) || '');
@@ -263,7 +266,7 @@
       justOpened: true
     };
     thread = null;
-    logCall(c, num);
+    if (!skipLog) logCall(c, num);
     renderCall();
     runCallPhases();
   }
@@ -473,44 +476,71 @@
     return (span ? span.textContent : btn.textContent || '').trim();
   }
 
-  /* app.js không lộ state, nên ghi nhớ id mỗi lần mở chi tiết. */
-  var lastDetailId = null;
+  /* app.js không lộ state ra ngoài, nên id của liên hệ đang mở được đọc TRỰC
+     TIẾP từ màn chi tiết mỗi lần bấm nút. Không ghi nhớ theo cú bấm trên dòng
+     danh sách: sau khi lưu, app.js tự mở màn chi tiết mà không có cú bấm nào,
+     nên cách đó sẽ trỏ sai người (lỗi gọi nhầm sang liên hệ trước). */
+  function currentDetailId() {
+    var head = screen.querySelector('.ios-detail-name, .md-detail-name');
+    if (!head) return null;
+    var want = head.textContent.trim();
+    var list = contacts();
+    var same = [];
+    for (var i = 0; i < list.length; i++) {
+      if (displayName(list[i]) === want) same.push(list[i]);
+    }
+    if (same.length === 1) return same[0].id;
+    if (!same.length) return null;
+    /* Trùng tên: phân biệt tiếp bằng số điện thoại đang hiện trên màn chi tiết. */
+    var cell = screen.querySelector('.ios-card-row .ios-card-value, .md-info-row .md-info-value');
+    var num = cell ? cell.textContent.trim() : '';
+    if (num) {
+      for (var j = 0; j < same.length; j++) {
+        var ps = same[j].phones || [];
+        for (var k = 0; k < ps.length; k++) {
+          if (String(ps[k].value || '').trim() === num) return same[j].id;
+        }
+      }
+    }
+    return same[0].id;
+  }
 
-  screen.addEventListener('click', function (e) {
-    var row = e.target.closest('[data-action="open-detail"][data-id]');
-    if (row) lastDetailId = row.getAttribute('data-id');
-  }, true);
-
+  /* MỘT listener duy nhất cho các nút trong màn chi tiết. Trước đây có hai
+     listener cùng khớp nút "Gọi" của Android, nên một cú bấm mở cuộc gọi và ghi
+     nhật ký HAI lần. */
   screen.addEventListener('click', function (e) {
     var btn = e.target.closest('.ios-action, .md-action');
-    if (!btn) return;
-    var label = labelOf(btn);
-    var id = lastDetailId;
-    if (!id) return;
-
-    if (label === 'Nhắn tin') {
-      e.preventDefault();
-      e.stopPropagation();
-      openThread(id);
+    if (btn) {
+      var label = labelOf(btn);
+      var id = currentDetailId();
+      if (!id) return;
+      if (label === 'Nhắn tin') {
+        e.preventDefault();
+        e.stopPropagation();
+        openThread(id);
+        return;
+      }
+      if (label === 'Gọi') {
+        e.preventDefault();
+        /* Android: app.js cũng có handler cho nút này (data-action="call-contact").
+           Để nó chạy luôn thì state.recents của app.js mới được cập nhật, nhờ đó
+           tab Nhật ký hiện ngay mà không cần tải lại trang. */
+        var ownedByApp = btn.getAttribute('data-action') === 'call-contact';
+        if (!ownedByApp) e.stopPropagation();
+        startCall(id, null, ownedByApp);
+      }
       return;
     }
-    if (label === 'Gọi') {
+
+    /* Số điện thoại trong thẻ chi tiết iOS (app.js mở sheet chọn số). */
+    var numBtn = e.target.closest('[data-action="call-sheet"]');
+    if (numBtn) {
+      var nid = currentDetailId();
+      if (!nid) return;
       e.preventDefault();
       e.stopPropagation();
-      startCall(id, null);
+      startCall(nid, numBtn.getAttribute('data-value'));
     }
-  }, true);
-
-  /* Nút số điện thoại trong thẻ chi tiết iOS (call-sheet) và nút Gọi cũ của
-     Android (call-contact) cũng mở màn hình gọi. */
-  screen.addEventListener('click', function (e) {
-    var el = e.target.closest('[data-action="call-sheet"], [data-action="call-contact"]');
-    if (!el) return;
-    e.preventDefault();
-    e.stopPropagation();
-    var id = lastDetailId;
-    if (!id) return;
-    startCall(id, el.getAttribute('data-value'));
   }, true);
 
   /* Hành động bên trong lớp phủ */
@@ -534,7 +564,11 @@
     if (a === 'call-from-thread') {
       var tid = thread && thread.contactId;
       closeLayer();
-      if (tid) startCall(tid, null);
+      /* Bấm lại nút Gọi của màn chi tiết để app.js tự ghi nhật ký (xem chú thích ở
+         startCall) — nhờ đó tab Nhật ký hiện ngay sau cuộc gọi. */
+      var gb = screen.querySelector('[data-action="call-contact"]');
+      if (gb) gb.click();
+      else if (tid) startCall(tid, null);
       return;
     }
     if (a === 'noop') { toastMsg('Đây là mô phỏng — chức năng này chưa được bật.'); return; }

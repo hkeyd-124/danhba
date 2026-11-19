@@ -1,0 +1,57 @@
+{
+  "name": "crypto-portfolio-widget",
+  "version": "1.0.0",
+  "description": "Widget quản lý danh mục đầu tư crypto theo thời gian thực (Binance Futures), lưu dữ liệu trên máy.",
+  "main": "main.js",
+  "author": "hkeyd",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "icons": "node build/make-icons.js",
+    "prestart": "node build/make-icons.js",
+    "start": "electron .",
+    "test": "node --test --test-timeout=15000 test/portfolio.test.js test/feed.test.js",
+    "test:e2e": "xvfb-run -a node test/e2e.js",
+    "predist": "node build/make-icons.js",
+    "dist": "electron-builder --win --x64",
+    "dist:portable": "electron-builder --win portable --x64"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^41.0.0"
+  },
+  "build": {
+    "appId": "com.hkeyd.cryptoportfoliowidget",
+    "productName": "Crypto Portfolio Widget",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "renderer/**/*",
+      "build/make-icons.js",
+      "build/icon.png",
+      "build/tray.png"
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Crypto Portfolio"
+    }
+  }
+}

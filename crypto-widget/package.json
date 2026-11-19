@@ -20,7 +20,8 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "electron": "^41.0.0"
+    "electron": "^41.0.0",
+    "electron-builder": "^26.18.0"
   },
   "build": {
     "appId": "com.hkeyd.cryptoportfoliowidget",

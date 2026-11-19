@@ -1,9 +1,128 @@
 # Crypto Portfolio Widget
 
-Widget nhỏ gọn cho Windows để theo dõi danh mục đầu tư crypto theo thời gian thực.
+Widget nhỏ gọn cho Windows để theo dõi danm mục đầu tư crypto theo thời gian thực.
 Giá lấy trực tiếp từ **Binance USDⓈ-M Futures**. Toàn bộ dữ liệu lưu trên máy.
 
-> Chạy `npm start` để mở widget. Ảnh giao diện: chạy `xvfb-run -a node test/shots.js` (Linux/CI) để tự sinh vào `shots/`.
+---
+
+## ⚡ Cài đặt trên Windows — chọn 1 trong 2 cách
+
+### Cách A — Chạy bằng file .bat (dễ nhất, khuyến nghị)
+
+1. Tải thư mục `crypto-widget` về máy (giải nén file zip, hoặc `git clone`).
+2. Mở thư mục đó. Bạn phải thấy các file: `package.json`, `main.js`, `preload.js`.
+3. **Nhấp đúp `RUN-WINDOWS.bat`**.
+
+File `.bat` sẽ tự làm hết: kiểm tra Node.js, cài dependencies lần đầu, rồi mở widget.
+Không cần gõ lệnh, không cần `cd`.
+
+> Nếu Windows hiện "Windows protected your PC" → bấm **More info** → **Run anyway**.
+
+### Cách B — Gõ lệnh thủ công
+
+```bat
+cd /d "đường_dẫn_đến_thư_mục_có_package.json"
+npm install
+npm start
+```
+
+⚠️ **Quan trọng:** `npm install` phải chạy trong thư mục **có `package.json`**.
+Nếu bạn thấy lỗi `ENOENT ... Could not read package.json`, nghĩa là bạn đang ở sai thư mục.
+
+---
+
+## 🩺 Lỗi thường gặp khi cài
+
+### `The system cannot find the path specified.`
+
+Bạn `cd` vào một đường dẫn không tồn tại. Nguyên nhân phổ biến nhất: **giải nén zip bị lồng thêm một cấp thư mục**.
+
+Khi giải nén `crypto-widget.zip` bằng "Extract All" vào `C:\`, Windows tạo ra:
+
+```
+C:\crypto-widget\              ← thư mục Windows tự tạo (theo tên file zip)
+└── crypto-widget\             ← thư mục THẬT chứa code
+    ├── package.json
+    ├── main.js
+    └── ...
+```
+
+Nên `cd C:\crypto-widget` **không** vào được thư mục code — phải là `C:\crypto-widget\crypto-widget`.
+
+**Cách kiểm tra:** mở thư mục trong File Explorer, bạn phải **nhìn thấy `package.json`**.
+Nếu chỉ thấy một thư mục con tên `crypto-widget`, hãy đi vào trong đó.
+
+**Cách sửa nhanh:** dùng `RUN-WINDOWS.bat` — nó tự `cd` về đúng thư mục của chính nó.
+
+### `npm error code ENOENT ... Could not read package.json`
+
+Bạn đang chạy `npm install` ở thư mục không có `package.json` (thường là `C:\Users\<tên_bạn>`).
+Đây **không phải lỗi của app** — chỉ là sai thư mục.
+
+**Sửa:**
+```bat
+cd /d "C:\crypto-widget\crypto-widget"
+dir package.json
+npm install
+```
+Lệnh `dir package.json` phải in ra thông tin file. Nếu báo "File Not Found" thì bạn vẫn ở sai chỗ.
+
+### `'npm' is not recognized as an internal or external command`
+
+Chưa cài Node.js, hoặc chưa mở lại cửa sổ lệnh sau khi cài.
+Tải **Node.js 20 LTS** tại https://nodejs.org/ → cài → **đóng hết** cửa sổ Command Prompt → mở lại.
+
+### `ERR_ELECTRON_BUILDER_CANNOT_EXECUTE` khi build
+
+Máy không đủ RAM cho mức nén mặc định của 7-Zip (`-mx=9` cần ~1 GB).
+Repo này đã đặt sẵn `"compression": "store"` trong `package.json` nên **không còn gặp lỗi này**.
+Nếu bạn đã sửa file và lỗi quay lại, kiểm tra dòng đó còn tồn tại không.
+
+### Thông báo Windows không hiện
+
+Windows chỉ hiển thị toast cho app có **shortcut trong Start Menu** mang đúng AppUserModelID.
+Bản **portable** (file .exe chạy trực tiếp) không có shortcut → Windows **âm thầm bỏ qua** thông báo.
+
+- **Cách sửa:** cài bằng bộ **Setup** (`Crypto Portfolio Widget Setup 1.0.0.exe`) thay vì bản portable.
+- **Dù thế nào**, app luôn có cảnh báo dự phòng: widget tự bật lên, nháy taskbar và bíp.
+- Tab **Cảnh báo** sẽ hiện một ô vàng giải thích nếu phát hiện tình huống này.
+
+---
+
+## Build ra file .exe
+
+```bat
+BUILD-WINDOWS.bat
+```
+
+hoặc thủ công:
+
+```bat
+npm install
+npm run dist
+```
+
+Kết quả trong `dist\`:
+
+- `Crypto Portfolio Widget Setup 1.0.0.exe` — bộ cài NSIS (tạo shortcut Desktop + Start Menu, cho chọn thư mục cài). **Dùng bản này để thông báo Windows hoạt động đầy đủ.**
+- `Crypto Portfolio Widget 1.0.0.exe` — bản **portable**, chạy ngay không cần cài.
+
+Chỉ muốn bản portable:
+
+```bat
+npm run dist:portable
+```
+
+> **Lưu ý:** build lần đầu cần internet để tải `electron-builder` và bộ binary Windows.
+> Nếu mạng công ty chặn, đặt biến môi trường proxy trước khi build:
+> ```bat
+> set HTTPS_PROXY=http://proxy:port
+> ```
+
+### Ký số (tuỳ chọn)
+
+Bản build không ký sẽ bị SmartScreen cảnh báo lần đầu chạy. Để ký, đặt các biến môi trường
+`CSC_LINK` (đường dẫn file .pfx) và `CSC_KEY_PASSWORD` rồi chạy lại `npm run dist`.
 
 ---
 
@@ -27,7 +146,7 @@ Giá lấy trực tiếp từ **Binance USDⓈ-M Futures**. Toàn bộ dữ li�
 
 ---
 
-## Chạy nhanh (từ source)
+## Chạy nhanh (từ source, dùng git)
 
 ```bat
 git clone https://github.com/hkeyd-124/danhba.git
@@ -37,44 +156,6 @@ npm start
 ```
 
 `npm install` sẽ tải Electron (~200 MB) ở lần đầu.
-
----
-
-## Build ra file .exe
-
-```bat
-cd crypto-widget
-npm install
-npm run dist
-```
-
-Kết quả trong thư mục `dist\`:
-
-- `Crypto Portfolio Widget Setup 1.0.0.exe` — bộ cài NSIS (tạo shortcut Desktop + Start Menu, cho chọn thư mục cài)
-- `Crypto Portfolio Widget 1.0.0.exe` — bản **portable**, chạy ngay không cần cài
-
-Chỉ muốn bản portable:
-
-```bat
-npm run dist:portable
-```
-
-> **Lưu ý:** build lần đầu cần internet để tải `electron-builder` và bộ binary Windows.
-> Nếu mạng công ty chặn, đặt biến môi trường proxy trước khi build:
-> ```bat
-> set HTTPS_PROXY=http://proxy:port
-> ```
-
-> **Nếu bước nén báo lỗi `ERR_ELECTRON_BUILDER_CANNOT_EXECUTE`:** máy build không đủ RAM cho mức nén mặc định (`-mx=9` cần ~1 GB trở lên). Thêm vào `package.json`:
-> ```json
-> "compression": "store"
-> ```
-> (hoặc `"normal"`), rồi chạy lại. File .exe sẽ lớn hơn nhưng build được trên máy yếu.
-
-### Ký số (tuỳ chọn)
-
-Bản build không ký sẽ bị SmartScreen cảnh báo lần đầu chạy. Để ký, đặt các biến môi trường
-`CSC_LINK` (đường dẫn file .pfx) và `CSC_KEY_PASSWORD` rồi chạy lại `npm run dist`.
 
 ---
 
@@ -149,6 +230,8 @@ npm run test:e2e
 
 ```
 crypto-widget/
+├── RUN-WINDOWS.bat      # chạy app bằng 1 cú nhấp đúp (tự cd, tự npm install)
+├── BUILD-WINDOWS.bat    # build ra .exe bằng 1 cú nhấp đúp
 ├── main.js              # main process: cửa sổ, tray, IPC, thông báo
 ├── preload.js           # cầu nối hẹp giữa main và renderer
 ├── src/

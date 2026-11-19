@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none';" />
+<title>Crypto Portfolio</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="widget" id="widget">
+
+  <!-- ============ title bar (drag handle) ============ -->
+  <header class="titlebar" id="titlebar">
+    <div class="brand">
+      <span class="dot" id="feedDot" data-status="idle"></span>
+      <span class="brand-name">Crypto</span>
+      <span class="brand-sub" id="feedLabel">đang kết nối…</span>
+    </div>
+    <div class="winbtns">
+      <button class="wbtn" id="btnPin" title="Luôn nổi trên cùng" aria-label="Ghim">📌</button>
+      <button class="wbtn" id="btnCollapse" title="Thu gọn" aria-label="Thu gọn">▾</button>
+      <button class="wbtn wbtn-close" id="btnClose" title="Ẩn xuống khay hệ thống" aria-label="Ẩn">✕</button>
+    </div>
+  </header>
+
+  <!-- ============ collapsed summary ============ -->
+  <section class="collapsed-view" id="collapsedView" hidden>
+    <div class="cv-left">
+      <div class="cv-label">Tổng giá trị</div>
+      <div class="cv-value" id="cvValue">—</div>
+    </div>
+    <div class="cv-right">
+      <div class="cv-pnl" id="cvPnl">—</div>
+      <div class="cv-pct" id="cvPct">—</div>
+    </div>
+  </section>
+
+  <!-- ============ expanded body ============ -->
+  <div class="body" id="body">
+
+    <section class="hero">
+      <div class="hero-label">Tổng giá trị danh mục</div>
+      <div class="hero-value" id="totalValue">—</div>
+      <div class="hero-row">
+        <span class="pill" id="totalPnl">—</span>
+        <span class="pill pill-ghost" id="totalPct">—</span>
+        <span class="hero-meta" id="posCount"></span>
+      </div>
+    </section>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab is-active" data-tab="positions" role="tab">Danh mục</button>
+      <button class="tab" data-tab="trades" role="tab">Lệnh</button>
+      <button class="tab" data-tab="alerts" role="tab">Cảnh báo</button>
+    </nav>
+
+    <!-- ---------- positions ---------- -->
+    <section class="panel is-active" id="panel-positions">
+      <div class="alloc" id="allocBar" aria-hidden="true"></div>
+      <div class="list" id="posList"></div>
+      <div class="empty" id="posEmpty" hidden>
+        <div class="empty-ico">📊</div>
+        <p>Chưa có lệnh nào.</p>
+        <p class="muted">Thêm lệnh mua đầu tiên để bắt đầu theo dõi.</p>
+      </div>
+    </section>
+
+    <!-- ---------- trades ---------- -->
+    <section class="panel" id="panel-trades">
+      <div class="panel-head">
+        <span class="panel-title">Lịch sử lệnh</span>
+        <button class="btn btn-primary btn-sm" id="btnAddTrade">+ Thêm lệnh</button>
+      </div>
+      <div class="list" id="tradeList"></div>
+      <div class="empty" id="tradeEmpty" hidden>
+        <div class="empty-ico">🧾</div>
+        <p>Chưa có lệnh.</p>
+        <p class="muted">Bấm “Thêm lệnh” để nhập tay.</p>
+      </div>
+    </section>
+
+    <!-- ---------- alerts ---------- -->
+    <section class="panel" id="panel-alerts">
+      <div class="panel-head">
+        <span class="panel-title">Cảnh báo giá</span>
+        <button class="btn btn-primary btn-sm" id="btnAddAlert">+ Thêm</button>
+      </div>
+      <div class="list" id="alertList"></div>
+      <div class="empty" id="alertEmpty" hidden>
+        <div class="empty-ico">🔔</div>
+        <p>Chưa có cảnh báo.</p>
+        <p class="muted">Đặt ngưỡng giá để nhận thông báo Windows.</p>
+      </div>
+      <div class="alert-foot">
+        <button class="btn btn-ghost btn-sm" id="btnTestAlert">Thử thông báo</button>
+        <button class="btn btn-ghost btn-sm" id="btnSound">Âm thanh: Bật</button>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <span id="warnLine" class="warn" hidden></span>
+      <button class="linkbtn" id="btnData">Dữ liệu trên máy</button>
+    </footer>
+  </div>
+
+  <!-- ============ modal: trade ============ -->
+  <div class="modal" id="tradeModal" hidden>
+    <form class="sheet" id="tradeForm" autocomplete="off">
+      <div class="sheet-head">
+        <h2 id="tradeTitle">Thêm lệnh</h2>
+        <button type="button" class="wbtn" data-close="tradeModal">✕</button>
+      </div>
+      <input type="hidden" id="tradeId" />
+
+      <label class="field">
+        <span>Đồng coin</span>
+        <input id="tradeSymbol" placeholder="BTC, ETH, SOL…" required />
+        <em class="hint">Tự thêm USDT nếu bạn không ghi.</em>
+      </label>
+
+      <div class="field">
+        <span>Loại lệnh</span>
+        <div class="seg" id="tradeSide">
+          <button type="button" class="seg-btn is-active" data-side="BUY">Mua</button>
+          <button type="button" class="seg-btn" data-side="SELL">Bán</button>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <label class="field">
+          <span>Giá vào (USDT)</span>
+          <input id="tradePrice" type="number" step="any" min="0" placeholder="0.00" required />
+        </label>
+        <label class="field">
+          <span>Số lượng</span>
+          <input id="tradeQty" type="number" step="any" min="0" placeholder="0.00" required />
+        </label>
+      </div>
+
+      <div class="grid2">
+        <label class="field">
+          <span>Phí (USDT)</span>
+          <input id="tradeFee" type="number" step="any" min="0" placeholder="0" />
+        </label>
+        <label class="field">
+          <span>Thời điểm</span>
+          <input id="tradeTime" type="datetime-local" />
+        </label>
+      </div>
+
+      <label class="field">
+        <span>Ghi chú</span>
+        <input id="tradeNote" maxlength="200" placeholder="Không bắt buộc" />
+      </label>
+
+      <div class="calc" id="tradeCalc">Nhập giá và số lượng để xem giá trị lệnh.</div>
+      <p class="form-error" id="tradeError" hidden></p>
+
+      <div class="sheet-actions">
+        <button type="button" class="btn btn-ghost" data-close="tradeModal">Huỷ</button>
+        <button type="submit" class="btn btn-primary">Lưu lệnh</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ============ modal: alert ============ -->
+  <div class="modal" id="alertModal" hidden>
+    <form class="sheet" id="alertForm" autocomplete="off">
+      <div class="sheet-head">
+        <h2 id="alertTitle">Thêm cảnh báo</h2>
+        <button type="button" class="wbtn" data-close="alertModal">✕</button>
+      </div>
+      <input type="hidden" id="alertId" />
+
+      <label class="field">
+        <span>Đồng coin</span>
+        <input id="alertSymbol" placeholder="BTC, ETH…" required />
+      </label>
+
+      <div class="field">
+        <span>Báo khi giá</span>
+        <div class="seg" id="alertDir">
+          <button type="button" class="seg-btn is-active" data-dir="above">Vượt lên trên</button>
+          <button type="button" class="seg-btn" data-dir="below">Giảm xuống dưới</button>
+        </div>
+      </div>
+
+      <label class="field">
+        <span>Ngưỡng giá (USDT)</span>
+        <input id="alertPrice" type="number" step="any" min="0" placeholder="0.00" required />
+        <em class="hint" id="alertNow">Giá hiện tại: —</em>
+      </label>
+
+      <label class="field">
+        <span>Ghi chú</span>
+        <input id="alertNote" maxlength="120" placeholder="Không bắt buộc" />
+      </label>
+
+      <p class="form-error" id="alertError" hidden></p>
+
+      <div class="sheet-actions">
+        <button type="button" class="btn btn-ghost" data-close="alertModal">Huỷ</button>
+        <button type="submit" class="btn btn-primary">Lưu cảnh báo</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

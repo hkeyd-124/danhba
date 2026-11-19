@@ -1,6 +1,6 @@
 # Crypto Portfolio Widget
 
-Widget nhỏ gọn cho Windows để theo dõi danm mục đầu tư crypto theo thời gian thực.
+Widget nhỏ gọn cho Windows để theo dõi danh mục đầu tư crypto theo thời gian thực.
 Giá lấy trực tiếp từ **Binance USDⓈ-M Futures**. Toàn bộ dữ liệu lưu trên máy.
 
 ---

@@ -65,6 +65,12 @@ npm run dist:portable
 > set HTTPS_PROXY=http://proxy:port
 > ```
 
+> **Nếu bước nén báo lỗi `ERR_ELECTRON_BUILDER_CANNOT_EXECUTE`:** máy build không đủ RAM cho mức nén mặc định (`-mx=9` cần ~1 GB trở lên). Thêm vào `package.json`:
+> ```json
+> "compression": "store"
+> ```
+> (hoặc `"normal"`), rồi chạy lại. File .exe sẽ lớn hơn nhưng build được trên máy yếu.
+
 ### Ký số (tuỳ chọn)
 
 Bản build không ký sẽ bị SmartScreen cảnh báo lần đầu chạy. Để ký, đặt các biến môi trường

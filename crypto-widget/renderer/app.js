@@ -253,6 +253,22 @@ function renderSettings() {
   $('collapsedView').hidden = !state.collapsed;
   $('btnCollapse').textContent = state.collapsed ? '▴' : '▾';
   $('btnCollapse').title = state.collapsed ? 'Mở rộng' : 'Thu gọn';
+
+  // Windows drops toasts for an app with no Start Menu shortcut (portable
+  // build). Say so instead of letting the user think alerts are broken.
+  const n = state.notif || {};
+  const warn = $('notifWarn');
+  if (warn) {
+    if (n.supported === false) {
+      warn.hidden = false;
+      warn.textContent = 'Máy này không hỗ trợ thông báo hệ thống. Cảnh báo vẫn hiện trong widget kèm tiếng bíp.';
+    } else if (n.portable) {
+      warn.hidden = false;
+      warn.textContent = 'Bản portable không có shortcut Start Menu nên Windows có thể bỏ qua thông báo. Cài bằng bộ Setup để nhận thông báo đầy đủ — cảnh báo vẫn hiện trong widget kèm tiếng bíp.';
+    } else {
+      warn.hidden = true;
+    }
+  }
 }
 
 // ------------------------------------------------------------------ tabs

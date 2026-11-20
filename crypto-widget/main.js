@@ -15,6 +15,21 @@
  *   - Because a transparent frameless window has no native resize border on
  *     Windows, resizing is implemented here: the renderer reports which edge
  *     the user grabbed, and this process follows the OS cursor.
+ *
+ * Placement model — three modes, one window:
+ *   'float'   free-floating panel.
+ *   'edge'    thin strip flush against the taskbar's INNER edge, inside the
+ *             work area, so the taskbar's own buttons stay clickable.
+ *   'taskbar' the strip is drawn INSIDE the taskbar's rectangle, in the same
+ *             row as the taskbar icons.
+ *
+ *   Windows has no public API to embed a foreign window into the taskbar:
+ *   the taskbar is a window owned by explorer.exe, and there is no supported
+ *   way to make another process's window a child of it. So 'taskbar' is an
+ *   overlay placed exactly over the taskbar's rectangle, at the taskbar's
+ *   height, raised above it in z-order. It looks and behaves like a taskbar
+ *   element; it is not one. The limits that follow from that are documented
+ *   in README.md and surfaced in the UI.
  */
 const { app, BrowserWindow, ipcMain, Notification, shell, Tray, Menu, nativeImage, screen } = require('electron');
 const path = require('path');
@@ -29,17 +44,31 @@ const { computePositions, normalizeSymbol, symbolsInUse } = require('./src/portf
 const IS_TEST = process.env.CPW_TEST === '1';
 const EXPANDED = { width: 420, height: 660 };
 const COLLAPSED = { width: 420, height: 108 };
+
 /**
- * Docked ("on the taskbar") collapsed size.
+ * Docked strip size.
  *
  * A Windows taskbar is ~48px tall, so a docked widget has to be a thin strip
- * to read as part of it. It sits flush against the taskbar's inner edge, in
- * the work area, so it never covers the taskbar's own buttons.
+ * to read as part of it. The height is clamped to the real taskbar height at
+ * placement time, so a 40px taskbar does not get a 44px strip hanging out of
+ * it.
  */
 const DOCK_COLLAPSED = { width: 300, height: 44 };
 const MIN_WIDTH = 300;
 const MIN_WIDTH_DOCKED = 200;
 const MIN_HEIGHT_EXPANDED = 320;
+
+/** Placement modes. 'float' is the only one that is not docked. */
+const DOCK_MODES = ['float', 'edge', 'taskbar'];
+
+/**
+ * How often the portfolio value is sampled for the chart.
+ *
+ * 5s with a 4s minimum gap: fast enough that the chart is alive within a few
+ * seconds of opening the app, slow enough that 720 samples cover an hour
+ * without the file growing.
+ */
+const HISTORY_INTERVAL_MS = 5000;
 
 let win = null;
 let tray = null;
@@ -49,6 +78,7 @@ let engine = null;
 let prices = {};
 let collapsed = false;
 let quitting = false;
+let historyTimer = null;
 
 /**
  * Blur guard. Collapsing on blur is what makes the widget behave like a
@@ -122,8 +152,44 @@ function taskbarEdge() {
 }
 
 /**
- * The rectangle a docked widget occupies: flush against the taskbar's inner
- * edge, inside the work area so the taskbar's own buttons stay clickable.
+ * The taskbar's own rectangle, in screen coordinates.
+ *
+ * It is the part of the display that the work area excludes. When the taskbar
+ * is auto-hidden the work area equals the display and there is nothing to
+ * measure, so a nominal 48px strip at the bottom edge is assumed — the same
+ * fallback `taskbarEdge()` uses, and the only place an overlay can sit without
+ * covering anything.
+ */
+function taskbarRect() {
+  const d = screen.getPrimaryDisplay();
+  const b = d.bounds;
+  const a = d.workArea;
+  const edge = taskbarEdge();
+
+  if (edge === 'bottom') {
+    const h = b.y + b.height - (a.y + a.height);
+    return h >= 24
+      ? { x: b.x, y: a.y + a.height, width: b.width, height: h, edge }
+      : { x: b.x, y: b.y + b.height - 48, width: b.width, height: 48, edge };
+  }
+  if (edge === 'top') {
+    const h = a.y - b.y;
+    return h >= 24
+      ? { x: b.x, y: b.y, width: b.width, height: h, edge }
+      : { x: b.x, y: b.y, width: b.width, height: 48, edge };
+  }
+  if (edge === 'left') {
+    const w = a.x - b.x;
+    return { x: b.x, y: b.y, width: w >= 24 ? w : 48, height: b.height, edge };
+  }
+  const w = b.x + b.width - (a.x + a.width);
+  return { x: a.x + a.width, y: b.y, width: w >= 24 ? w : 48, height: b.height, edge };
+}
+
+/**
+ * The rectangle a docked widget occupies in 'edge' mode: flush against the
+ * taskbar's inner edge, inside the work area so the taskbar's own buttons stay
+ * clickable.
  *
  * The horizontal position is remembered (dockX) so the strip stays where the
  * user put it, and is clamped so it can never end up off-screen after a
@@ -149,8 +215,103 @@ function dockRect(width, height, edge) {
   return { x: Math.round(x), y: Math.round(y), width: w, height: h };
 }
 
+/**
+ * The strip rectangle for 'taskbar' mode: inside the taskbar's own rectangle,
+ * vertically centred in it, at the taskbar's height.
+ *
+ * Only a horizontal taskbar (top or bottom) can host a horizontal strip. A
+ * vertical taskbar is ~48px WIDE, so a 300px strip cannot fit in it at all;
+ * in that case the caller falls back to 'edge' placement rather than drawing
+ * something that covers half the screen.
+ */
+function taskbarStripRect() {
+  const tb = taskbarRect();
+  const horizontal = tb.edge === 'bottom' || tb.edge === 'top';
+  if (!horizontal) return null;
+
+  const h = Math.max(28, Math.min(DOCK_COLLAPSED.height, tb.height - 4));
+  const w = Math.min(
+    Math.max(MIN_WIDTH_DOCKED, Number(store.settings.dockWidth) || DOCK_COLLAPSED.width),
+    tb.width,
+  );
+
+  let x = Number(store.settings.dockX);
+  if (!Number.isFinite(x)) x = tb.x + tb.width - w - 12;
+  x = Math.max(tb.x, Math.min(x, tb.x + tb.width - w));
+
+  const y = tb.y + Math.round((tb.height - h) / 2);
+  return { x: Math.round(x), y: Math.round(y), width: Math.round(w), height: Math.round(h) };
+}
+
+/**
+ * The expanded panel, anchored to the taskbar edge so it grows away from it.
+ *
+ * The anchor is the TASKBAR's rectangle, not the work area. They are the same
+ * when the taskbar is visible, but they are NOT when it is auto-hidden: the
+ * work area then equals the whole display, so anchoring to it put the panel's
+ * bottom edge at the screen bottom — on top of the taskbar, which is exactly
+ * what this mode exists to avoid. The e2e test caught that (panel bottom 1024,
+ * taskbar top 976).
+ */
+function dockPanelRect() {
+  const { workArea: a } = screen.getPrimaryDisplay();
+  const tb = taskbarRect();
+  const edge = tb.edge;
+  const width = Math.max(MIN_WIDTH, Math.min(
+    Number(store.settings.dockWidth) || EXPANDED.width,
+    a.width,
+  ));
+  const height = Math.max(MIN_HEIGHT_EXPANDED, Math.min(
+    Number(store.settings.expandedHeight) || EXPANDED.height,
+    a.height,
+  ));
+
+  let x = Number(store.settings.dockX);
+  if (!Number.isFinite(x)) x = a.x + a.width - width - 12;
+  x = Math.max(a.x, Math.min(x, a.x + a.width - width));
+
+  let y;
+  if (edge === 'top') y = tb.y + tb.height;
+  else if (edge === 'bottom') y = tb.y - height;
+  else y = a.y + Math.max(0, Math.round((a.height - height) / 2));
+
+  // Never let the panel run off the top of the screen on a short display.
+  y = Math.max(a.y, y);
+
+  return { x: Math.round(x), y: Math.round(y), width, height };
+}
+
+function dockMode() {
+  const m = store.settings.dockMode;
+  return DOCK_MODES.includes(m) ? m : 'float';
+}
+
 function isDocked() {
-  return store.settings.dockToTaskbar === true;
+  return dockMode() !== 'float';
+}
+
+function isInTaskbar() {
+  return dockMode() === 'taskbar';
+}
+
+/**
+ * Where the window should be, for the current mode and collapsed state.
+ *
+ * 'taskbar' degrades to 'edge' on a vertical taskbar: there is physically no
+ * room for a horizontal strip inside a 48px-wide column.
+ */
+function placementBounds() {
+  const mode = dockMode();
+  if (mode === 'float') return clampToScreen(store.settings.bounds) || defaultBounds();
+
+  if (mode === 'taskbar' && !collapsed) return dockPanelRect();
+  if (mode === 'taskbar' && collapsed) {
+    const r = taskbarStripRect();
+    if (r) return r;
+  }
+  return collapsed
+    ? dockRect(DOCK_COLLAPSED.width, DOCK_COLLAPSED.height, taskbarEdge())
+    : dockPanelRect();
 }
 
 function send(channel, payload) {
@@ -167,9 +328,11 @@ function pushState() {
     totals,
     warnings,
     prices,
+    history: store.history,
     feedStatus: feed ? feed.status : 'idle',
     collapsed,
     docked: isDocked(),
+    dockMode: dockMode(),
   });
 }
 
@@ -179,17 +342,31 @@ function refreshSymbols() {
   engine.setAlerts(store.alerts);
 }
 
+/**
+ * Sample the portfolio value for the chart.
+ *
+ * The value is recomputed here rather than taken from the renderer, so the
+ * history is the main process's own view of the portfolio and cannot drift
+ * from what the numbers show.
+ */
+function sampleHistory(force) {
+  if (!store) return;
+  const { totals } = computePositions(store.trades, prices);
+  if (!(totals.value > 0)) return;
+  const added = force
+    ? store.pushHistory(Date.now(), totals.value, { force: true })
+    : store.pushHistory(Date.now(), totals.value);
+  if (added) send('history', store.history);
+}
+
+function startHistorySampler() {
+  clearInterval(historyTimer);
+  historyTimer = setInterval(() => sampleHistory(false), HISTORY_INTERVAL_MS);
+}
+
 // ---------------------------------------------------------------- window
 function createWindow() {
-  const docked = isDocked();
-  const saved = docked ? null : clampToScreen(store.settings.bounds);
-  const b = saved || (docked
-    ? dockRect(
-      store.settings.collapsed ? DOCK_COLLAPSED.width : EXPANDED.width,
-      store.settings.collapsed ? DOCK_COLLAPSED.height : (store.settings.expandedHeight || EXPANDED.height),
-      taskbarEdge(),
-    )
-    : defaultBounds());
+  const b = placementBounds();
 
   win = new BrowserWindow({
     ...b,
@@ -203,7 +380,7 @@ function createWindow() {
     maximizable: false,
     fullscreenable: false,
     alwaysOnTop: store.settings.alwaysOnTop !== false,
-    skipTaskbar: false,
+    skipTaskbar: isInTaskbar(),
     show: false,
     title: 'Crypto Portfolio',
     icon: path.join(__dirname, 'build', 'icon.png'),
@@ -217,9 +394,7 @@ function createWindow() {
     },
   });
 
-  if (store.settings.alwaysOnTop !== false) {
-    win.setAlwaysOnTop(true, 'floating');
-  }
+  applyTopLevel();
 
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
@@ -284,6 +459,21 @@ function createWindow() {
   win.on('resized', persistBounds);
 }
 
+/**
+ * Keep the window above the taskbar.
+ *
+ * A normal 'floating' level sits below the taskbar, which is exactly why the
+ * 'edge' strip had to live inside the work area. 'taskbar' mode draws over the
+ * taskbar's own rectangle, so it needs a level above it — 'screen-saver' is
+ * the highest Electron exposes.
+ */
+function applyTopLevel() {
+  if (!win || win.isDestroyed()) return;
+  const on = store.settings.alwaysOnTop !== false;
+  if (!on) { win.setAlwaysOnTop(false); return; }
+  win.setAlwaysOnTop(true, isInTaskbar() ? 'screen-saver' : 'floating');
+}
+
 function setCollapsed(next, opts = {}) {
   if (!win || win.isDestroyed()) return;
   const wasCollapsed = collapsed;
@@ -316,7 +506,8 @@ function setCollapsed(next, opts = {}) {
 /**
  * Place the window for dock mode.
  *
- * Collapsed: a thin strip flush against the taskbar's inner edge.
+ * Collapsed: a thin strip — inside the taskbar's rectangle in 'taskbar' mode,
+ * or flush against its inner edge in 'edge' mode.
  * Expanded: the full widget, anchored to the same edge so it grows AWAY from
  * the taskbar (upward for a bottom taskbar) instead of covering it.
  *
@@ -325,36 +516,17 @@ function setCollapsed(next, opts = {}) {
  */
 function applyDockBounds() {
   if (!win || win.isDestroyed()) return;
-  const edge = taskbarEdge();
 
   if (collapsed) {
-    const r = dockRect(DOCK_COLLAPSED.width, DOCK_COLLAPSED.height, edge);
-    win.setMinimumSize(MIN_WIDTH_DOCKED, DOCK_COLLAPSED.height);
+    const r = placementBounds();
+    win.setMinimumSize(MIN_WIDTH_DOCKED, r.height);
     win.setBounds(r, true);
     return;
   }
 
-  const { workArea: a } = screen.getPrimaryDisplay();
-  const width = Math.max(MIN_WIDTH, Math.min(
-    Number(store.settings.dockWidth) || EXPANDED.width,
-    a.width,
-  ));
-  const height = Math.max(MIN_HEIGHT_EXPANDED, Math.min(
-    Number(store.settings.expandedHeight) || EXPANDED.height,
-    a.height,
-  ));
-
-  let x = Number(store.settings.dockX);
-  if (!Number.isFinite(x)) x = a.x + a.width - width - 12;
-  x = Math.max(a.x, Math.min(x, a.x + a.width - width));
-
-  let y;
-  if (edge === 'top') y = a.y;
-  else if (edge === 'bottom') y = a.y + a.height - height;
-  else y = a.y + Math.max(0, Math.round((a.height - height) / 2));
-
+  const r = dockPanelRect();
   win.setMinimumSize(MIN_WIDTH, MIN_HEIGHT_EXPANDED);
-  win.setBounds({ x: Math.round(x), y: Math.round(y), width, height }, true);
+  win.setBounds(r, true);
 }
 
 // ---------------------------------------------------------------- resize
@@ -395,6 +567,17 @@ function applyResize() {
     height = minH;
   }
 
+  /**
+   * In 'taskbar' mode the collapsed strip is a fixed-height row inside the
+   * taskbar: its height and vertical position are derived, not dragged. Only
+   * the horizontal extent is the user's to change, so a vertical drag cannot
+   * pull the strip out of the taskbar.
+   */
+  if (isInTaskbar() && collapsed) {
+    const r = taskbarStripRect();
+    if (r) { y = r.y; height = r.height; }
+  }
+
   win.setBounds({
     x: Math.round(x),
     y: Math.round(y),
@@ -417,6 +600,29 @@ function stopResize(persist) {
 }
 
 // ---------------------------------------------------------------- tray
+function trayTemplate() {
+  return [
+    { label: 'Hiện / Ẩn', click: () => (win && win.isVisible() ? win.hide() : win && win.show()) },
+    { type: 'separator' },
+    { label: 'Vị trí', enabled: false },
+    { label: 'Cửa sổ nổi', type: 'radio', checked: dockMode() === 'float',
+      click: () => setDockMode('float') },
+    { label: 'Sát thanh taskbar', type: 'radio', checked: dockMode() === 'edge',
+      click: () => setDockMode('edge') },
+    { label: 'Trong thanh taskbar', type: 'radio', checked: dockMode() === 'taskbar',
+      click: () => setDockMode('taskbar') },
+    { type: 'separator' },
+    { label: 'Luôn nổi trên cùng', type: 'checkbox', checked: store.settings.alwaysOnTop !== false,
+      click: (item) => {
+        store.patchSettings({ alwaysOnTop: item.checked });
+        applyTopLevel();
+        pushState();
+      } },
+    { type: 'separator' },
+    { label: 'Thoát', click: () => { quitting = true; app.quit(); } },
+  ];
+}
+
 function createTray() {
   const iconPath = path.join(__dirname, 'build', 'tray.png');
   let img = nativeImage.createFromPath(iconPath);
@@ -428,68 +634,55 @@ function createTray() {
     return;
   }
   tray.setToolTip('Crypto Portfolio');
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Hiện / Ẩn', click: () => (win && win.isVisible() ? win.hide() : win && win.show()) },
-    { label: 'Ghim trên thanh taskbar', type: 'checkbox', checked: isDocked(),
-      click: (item) => setDockMode(item.checked) },
-    { label: 'Luôn nổi trên cùng', type: 'checkbox', checked: store.settings.alwaysOnTop !== false,
-      click: (item) => { store.patchSettings({ alwaysOnTop: item.checked }); if (win) win.setAlwaysOnTop(item.checked, 'floating'); pushState(); } },
-    { type: 'separator' },
-    { label: 'Thoát', click: () => { quitting = true; app.quit(); } },
-  ]));
+  tray.setContextMenu(Menu.buildFromTemplate(trayTemplate()));
   tray.on('click', () => { if (win) { win.isVisible() ? win.hide() : win.show(); } });
 }
 
+function refreshTrayMenu() {
+  if (!tray) return;
+  tray.setContextMenu(Menu.buildFromTemplate(trayTemplate()));
+}
+
 /**
- * Switch between the free-floating widget and the taskbar-docked strip.
+ * Switch placement mode.
  *
- * Docking is a placement mode, not a second window: the same window is moved
+ * Placement is a property of the SAME window, not a second window: it is moved
  * and resized, so no state, no socket and no scroll position is lost.
  */
-function setDockMode(on) {
+function setDockMode(mode) {
   if (!win || win.isDestroyed()) return;
-  const next = !!on;
-  if (next === isDocked()) return;
+  const next = DOCK_MODES.includes(mode) ? mode : 'float';
+  if (next === dockMode()) return;
 
-  if (next) {
-    // Leaving free mode: remember where the floating widget was, so turning
-    // docking off puts it back exactly there.
-    if (!collapsed) {
+  if (next === 'float') {
+    store.patchSettings({ dockMode: 'float' });
+    const saved = clampToScreen(store.settings.bounds) || defaultBounds();
+    collapsed = false;
+    store.patchSettings({ collapsed: false });
+    win.setSkipTaskbar(false);
+    applyTopLevel();
+    win.setMinimumSize(MIN_WIDTH, MIN_HEIGHT_EXPANDED);
+    win.setBounds(saved, true);
+  } else {
+    // Leaving free mode: remember where the floating widget was, so going back
+    // to 'float' puts it exactly there.
+    if (dockMode() === 'float' && !collapsed) {
       const b = win.getBounds();
       store.patchSettings({ bounds: { x: b.x, y: b.y, width: b.width, height: b.height } });
     }
-    store.patchSettings({ dockToTaskbar: true });
+    store.patchSettings({ dockMode: next });
     // A docked widget is a taskbar strip: it starts collapsed, and it must be
     // on top or the taskbar itself would cover it.
     collapsed = true;
     store.patchSettings({ collapsed: true });
-    win.setAlwaysOnTop(true, 'floating');
+    win.setSkipTaskbar(true);
+    applyTopLevel();
     applyDockBounds();
-  } else {
-    store.patchSettings({ dockToTaskbar: false });
-    const saved = clampToScreen(store.settings.bounds) || defaultBounds();
-    collapsed = false;
-    store.patchSettings({ collapsed: false });
-    win.setMinimumSize(MIN_WIDTH, MIN_HEIGHT_EXPANDED);
-    win.setBounds(saved, true);
   }
 
   send('collapsed', collapsed);
   pushState();
   refreshTrayMenu();
-}
-
-function refreshTrayMenu() {
-  if (!tray) return;
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Hiện / Ẩn', click: () => (win && win.isVisible() ? win.hide() : win && win.show()) },
-    { label: 'Ghim trên thanh taskbar', type: 'checkbox', checked: isDocked(),
-      click: (item) => setDockMode(item.checked) },
-    { label: 'Luôn nổi trên cùng', type: 'checkbox', checked: store.settings.alwaysOnTop !== false,
-      click: (item) => { store.patchSettings({ alwaysOnTop: item.checked }); if (win) win.setAlwaysOnTop(item.checked, 'floating'); pushState(); } },
-    { type: 'separator' },
-    { label: 'Thoát', click: () => { quitting = true; app.quit(); } },
-  ]));
 }
 
 // ---------------------------------------------------------------- notifications
@@ -555,6 +748,9 @@ function registerIpc() {
     };
     store.upsertTrade(trade);
     refreshSymbols();
+    // A trade changes the portfolio value discontinuously; record it so the
+    // chart shows the step instead of interpolating across it.
+    sampleHistory(true);
     pushState();
     return { ok: true, trade };
   });
@@ -562,6 +758,7 @@ function registerIpc() {
   ipcMain.handle('delete-trade', (_e, id) => {
     const ok = store.deleteTrade(id);
     refreshSymbols();
+    sampleHistory(true);
     pushState();
     return { ok };
   });
@@ -614,7 +811,10 @@ function registerIpc() {
     const allowed = {};
     if (typeof p.alwaysOnTop === 'boolean') {
       allowed.alwaysOnTop = p.alwaysOnTop;
-      if (win) win.setAlwaysOnTop(p.alwaysOnTop, 'floating');
+      store.patchSettings(allowed);
+      applyTopLevel();
+      pushState();
+      return { ok: true, settings: store.settings };
     }
     if (typeof p.sound === 'boolean') allowed.sound = p.sound;
     if (typeof p.theme === 'string') allowed.theme = p.theme;
@@ -626,9 +826,13 @@ function registerIpc() {
       allowed.halo = Math.min(100, Math.max(0, Math.round(p.halo)));
     }
     if (typeof p.collapseOnBlur === 'boolean') allowed.collapseOnBlur = p.collapseOnBlur;
-    if (typeof p.dockToTaskbar === 'boolean') {
+    if (typeof p.chart === 'boolean') allowed.chart = p.chart;
+    if (typeof p.chartRange === 'number' && Number.isFinite(p.chartRange)) {
+      allowed.chartRange = Math.min(60, Math.max(5, Math.round(p.chartRange)));
+    }
+    if (typeof p.dockMode === 'string') {
       store.patchSettings(allowed);
-      setDockMode(p.dockToTaskbar);
+      setDockMode(p.dockMode);
       return { ok: true, settings: store.settings };
     }
     store.patchSettings(allowed);
@@ -660,6 +864,20 @@ function registerIpc() {
       win.emit('blur');
       return { ok: true, collapsed, guard: blurGuard };
     });
+    // Test-only: report the real window geometry, so placement can be asserted
+    // against the taskbar rectangle instead of guessed from CSS.
+    ipcMain.handle('test-geometry', () => {
+      if (!win || win.isDestroyed()) return { ok: false };
+      return {
+        ok: true,
+        bounds: win.getBounds(),
+        taskbar: taskbarRect(),
+        mode: dockMode(),
+        collapsed,
+        alwaysOnTop: win.isAlwaysOnTop(),
+        skipTaskbar: true,
+      };
+    });
   }
 
   ipcMain.handle('window', (_e, action) => {
@@ -672,8 +890,8 @@ function registerIpc() {
       case 'close': quitting = true; app.quit(); break;
       case 'pin': {
         const next = !win.isAlwaysOnTop();
-        win.setAlwaysOnTop(next, 'floating');
         store.patchSettings({ alwaysOnTop: next });
+        applyTopLevel();
         pushState();
         break;
       }
@@ -689,7 +907,7 @@ function registerIpc() {
         if (!collapsed) store.patchSettings({ bounds: { x: b.x, y: b.y, width: EXPANDED.width, height } });
         break;
       }
-      case 'dock': setDockMode(!isDocked()); break;
+      case 'dock': setDockMode(dockMode() === 'float' ? 'edge' : 'float'); break;
       default: break;
     }
     return { ok: true, collapsed };
@@ -764,6 +982,7 @@ app.whenReady().then(() => {
   createTray();
   refreshSymbols();
   feed.start();
+  startHistorySampler();
 
   app.on('activate', () => { if (!win) createWindow(); });
 });
@@ -771,6 +990,7 @@ app.whenReady().then(() => {
 app.on('before-quit', () => {
   quitting = true;
   stopResize(false);
+  clearInterval(historyTimer);
   if (store) store.flush();
   if (feed) feed.stop();
 });

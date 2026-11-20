@@ -7,6 +7,14 @@
  *     every navigation / window.open is blocked. Prices arrive over IPC.
  *   - Only this process opens a socket, and only to Binance Futures.
  *   - Data is written to one JSON file in the per-user app-data folder.
+ *
+ * Appearance model:
+ *   - The window is created `transparent: true` once, and never recreated.
+ *     Every background style (opaque, glass, see-through) is painted by CSS,
+ *     so switching styles is instant and cannot lose state.
+ *   - Because a transparent frameless window has no native resize border on
+ *     Windows, resizing is implemented here: the renderer reports which edge
+ *     the user grabbed, and this process follows the OS cursor.
  */
 const { app, BrowserWindow, ipcMain, Notification, shell, Tray, Menu, nativeImage, screen } = require('electron');
 const path = require('path');
@@ -21,6 +29,8 @@ const { computePositions, normalizeSymbol, symbolsInUse } = require('./src/portf
 const IS_TEST = process.env.CPW_TEST === '1';
 const EXPANDED = { width: 420, height: 660 };
 const COLLAPSED = { width: 420, height: 108 };
+const MIN_WIDTH = 300;
+const MIN_HEIGHT_EXPANDED = 320;
 
 let win = null;
 let tray = null;
@@ -30,6 +40,10 @@ let engine = null;
 let prices = {};
 let collapsed = false;
 let quitting = false;
+
+// resize session
+let resizeTimer = null;
+let resizeState = null;
 
 // ---------------------------------------------------------------- single instance
 if (!IS_TEST && !app.requestSingleInstanceLock()) {
@@ -86,31 +100,7 @@ function pushState() {
     prices,
     feedStatus: feed ? feed.status : 'idle',
     collapsed,
-    notif: { ...notifState, portable: !app.isPackaged ? false : !hasStartMenuShortcut() },
   });
-}
-
-/**
- * A portable build has no Start Menu shortcut, so Windows cannot attribute a
- * toast to it and drops it silently. We detect that so the UI can tell the
- * user to use the installer (or accept the in-app cue).
- */
-function hasStartMenuShortcut() {
-  if (process.platform !== 'win32') return true;
-  try {
-    const dir = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs');
-    const stack = [dir];
-    while (stack.length) {
-      const cur = stack.pop();
-      for (const e of fs.readdirSync(cur, { withFileTypes: true })) {
-        const p = path.join(cur, e.name);
-        if (e.isDirectory()) stack.push(p);
-        else if (e.name.toLowerCase().endsWith('.lnk')
-          && e.name.toLowerCase().includes('crypto portfolio')) return true;
-      }
-    }
-  } catch (_) { /* ignore */ }
-  return false;
 }
 
 function refreshSymbols() {
@@ -126,12 +116,12 @@ function createWindow() {
 
   win = new BrowserWindow({
     ...b,
-    minWidth: 340,
+    minWidth: MIN_WIDTH,
     minHeight: COLLAPSED.height,
-    maxWidth: 720,
     frame: false,
-    transparent: false,
-    backgroundColor: '#0b0f17',
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
     resizable: true,
     maximizable: false,
     fullscreenable: false,
@@ -152,9 +142,6 @@ function createWindow() {
 
   if (store.settings.alwaysOnTop !== false) {
     win.setAlwaysOnTop(true, 'floating');
-  }
-  if (store.settings.opacity && store.settings.opacity < 1) {
-    win.setOpacity(Math.max(0.5, store.settings.opacity));
   }
 
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -191,14 +178,76 @@ function createWindow() {
 
 function setCollapsed(next, opts = {}) {
   if (!win || win.isDestroyed()) return;
+  const wasCollapsed = collapsed;
   collapsed = !!next;
   const b = win.getBounds();
-  const height = collapsed ? COLLAPSED.height : Math.max(EXPANDED.height, store.settings.bounds?.height || 0);
-  win.setMinimumSize(340, collapsed ? COLLAPSED.height : 420);
-  win.setBounds({ x: b.x, y: b.y, width: Math.max(340, b.width), height }, true);
+
+  if (collapsed && !wasCollapsed) {
+    // Remember the expanded height so expanding restores what the user chose.
+    store.patchSettings({ expandedHeight: b.height });
+  }
+
+  const height = collapsed
+    ? COLLAPSED.height
+    : Math.max(MIN_HEIGHT_EXPANDED, store.settings.expandedHeight || EXPANDED.height);
+
+  win.setMinimumSize(MIN_WIDTH, collapsed ? COLLAPSED.height : MIN_HEIGHT_EXPANDED);
+  win.setBounds({ x: b.x, y: b.y, width: Math.max(MIN_WIDTH, b.width), height }, true);
   if (!opts.silent) store.patchSettings({ collapsed });
   send('collapsed', collapsed);
   pushState();
+}
+
+// ---------------------------------------------------------------- resize
+/**
+ * A transparent frameless window has no native resize border on Windows, so
+ * the renderer draws 8 invisible grab strips and tells us which one is held.
+ * We then follow the OS cursor here — one timer, no IPC per mouse move.
+ */
+function applyResize() {
+  if (!win || win.isDestroyed() || !resizeState) return;
+  const cur = screen.getCursorScreenPoint();
+  const dx = cur.x - resizeState.cursor.x;
+  const dy = cur.y - resizeState.cursor.y;
+  const s = resizeState.start;
+  const edge = resizeState.edge;
+
+  let x = s.x;
+  let y = s.y;
+  let width = s.width;
+  let height = s.height;
+
+  const minH = collapsed ? COLLAPSED.height : MIN_HEIGHT_EXPANDED;
+
+  if (edge.includes('e')) width = s.width + dx;
+  if (edge.includes('s')) height = s.height + dy;
+  if (edge.includes('w')) { width = s.width - dx; x = s.x + dx; }
+  if (edge.includes('n')) { height = s.height - dy; y = s.y + dy; }
+
+  if (width < MIN_WIDTH) {
+    if (edge.includes('w')) x = s.x + s.width - MIN_WIDTH;
+    width = MIN_WIDTH;
+  }
+  if (height < minH) {
+    if (edge.includes('n')) y = s.y + s.height - minH;
+    height = minH;
+  }
+
+  win.setBounds({
+    x: Math.round(x),
+    y: Math.round(y),
+    width: Math.round(width),
+    height: Math.round(height),
+  });
+}
+
+function stopResize(persist) {
+  if (resizeTimer) { clearInterval(resizeTimer); resizeTimer = null; }
+  resizeState = null;
+  if (persist && win && !win.isDestroyed() && !collapsed) {
+    const { x, y, width, height } = win.getBounds();
+    store.patchSettings({ bounds: { x, y, width, height } });
+  }
 }
 
 // ---------------------------------------------------------------- tray
@@ -224,68 +273,28 @@ function createTray() {
 }
 
 // ---------------------------------------------------------------- notifications
-/**
- * Windows only shows a toast for an app it can attribute to a Start Menu
- * shortcut carrying the same AppUserModelID. A portable .exe that was never
- * installed has no such shortcut, so `n.show()` succeeds and the toast is
- * silently dropped — no error, no event. We therefore:
- *   1. register the AUMID before any notification (required on Windows),
- *   2. treat "shown" as unproven and ALWAYS give a second, in-app cue
- *      (window flash + beep) so an alert is never lost,
- *   3. expose the diagnosis to the UI so the user can see why.
- */
-let notifState = { supported: false, lastError: null, shown: 0 };
-
-function initNotifications() {
-  notifState.supported = Notification.isSupported();
-  if (process.platform === 'win32') {
-    // Must match build.appId in package.json, and must be set before showing.
-    try { app.setAppUserModelId('com.hkeyd.cryptoportfoliowidget'); } catch (_) { /* ignore */ }
-  }
-}
-
 function fireNotification(payload) {
   const base = payload.symbol.replace(/(USDT|USDC|BUSD)$/, '');
   const dirText = payload.direction === 'above' ? 'vượt lên trên' : 'giảm xuống dưới';
   const title = `⚡ ${base} ${dirText} ${fmt(payload.level)}`;
   const body = `Giá hiện tại: ${fmt(payload.price)} USDT${payload.note ? `\n${payload.note}` : ''}`;
 
-  let toastShown = false;
-  if (notifState.supported) {
-    try {
-      const n = new Notification({
-        title,
-        body,
-        silent: store.settings.sound === false,
-        urgency: 'critical',
-        timeoutType: 'never',
-      });
-      n.on('click', () => { if (win) { win.show(); win.focus(); } });
-      n.on('failed', (_e, err) => {
-        notifState.lastError = String(err || 'unknown');
-        if (process.env.CPW_DEBUG) console.error('[notify] failed:', err);
-      });
-      n.show();
-      toastShown = true;
-      notifState.shown += 1;
-    } catch (err) {
-      notifState.lastError = err.message;
-    }
+  if (Notification.isSupported()) {
+    const n = new Notification({
+      title,
+      body,
+      silent: store.settings.sound === false,
+      urgency: 'critical',
+      timeoutType: 'never',
+    });
+    n.on('click', () => { if (win) { win.show(); win.focus(); } });
+    n.show();
   }
-
-  // Always give an in-app cue: the toast may have been dropped by Windows
-  // (portable build, Focus Assist, notifications disabled for the app).
-  if (win && !win.isDestroyed()) {
-    if (!win.isVisible()) win.show();
-    // flashFrame is the Windows taskbar flash; harmless elsewhere.
-    try { win.flashFrame(true); } catch (_) { /* ignore */ }
-    setTimeout(() => { try { if (win && !win.isDestroyed()) win.flashFrame(false); } catch (_) {} }, 4000);
-  }
+  // Windows system beep as an extra audible cue (notification sound can be muted by Focus Assist).
   if (store.settings.sound !== false) {
     try { shell.beep(); } catch (_) { /* ignore */ }
   }
-
-  send('alert-fired', { ...payload, toastShown });
+  send('alert-fired', payload);
 }
 
 function fmt(n) {
@@ -388,9 +397,10 @@ function registerIpc() {
       if (win) win.setAlwaysOnTop(p.alwaysOnTop, 'floating');
     }
     if (typeof p.sound === 'boolean') allowed.sound = p.sound;
-    if (typeof p.opacity === 'number') {
-      allowed.opacity = Math.min(1, Math.max(0.5, p.opacity));
-      if (win) win.setOpacity(allowed.opacity);
+    if (typeof p.theme === 'string') allowed.theme = p.theme;
+    if (typeof p.textColor === 'string') allowed.textColor = p.textColor;
+    if (typeof p.bgAlpha === 'number' && Number.isFinite(p.bgAlpha)) {
+      allowed.bgAlpha = Math.min(1, Math.max(0, p.bgAlpha));
     }
     store.patchSettings(allowed);
     pushState();
@@ -411,9 +421,33 @@ function registerIpc() {
         pushState();
         break;
       }
+      case 'reset-size': {
+        const b = win.getBounds();
+        const height = collapsed ? COLLAPSED.height : EXPANDED.height;
+        win.setBounds({ x: b.x, y: b.y, width: EXPANDED.width, height }, true);
+        if (!collapsed) store.patchSettings({ bounds: { x: b.x, y: b.y, width: EXPANDED.width, height } });
+        break;
+      }
       default: break;
     }
     return { ok: true, collapsed };
+  });
+
+  ipcMain.handle('resize-start', (_e, edge) => {
+    if (!win || win.isDestroyed()) return { ok: false };
+    stopResize(false);
+    resizeState = {
+      edge: String(edge || 'se'),
+      start: win.getBounds(),
+      cursor: screen.getCursorScreenPoint(),
+    };
+    resizeTimer = setInterval(applyResize, 16);
+    return { ok: true };
+  });
+
+  ipcMain.handle('resize-end', () => {
+    stopResize(true);
+    return { ok: true };
   });
 
   ipcMain.handle('open-data-folder', () => {
@@ -441,7 +475,6 @@ function ensureIcons() {
 
 app.whenReady().then(() => {
   app.setAppUserModelId('com.hkeyd.cryptoportfoliowidget');
-  initNotifications();
   ensureIcons();
 
   store = new Store(dataFile());
@@ -475,6 +508,7 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   quitting = true;
+  stopResize(false);
   if (store) store.flush();
   if (feed) feed.stop();
 });

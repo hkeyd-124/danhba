@@ -12,6 +12,7 @@ Giá lấy trực tiếp từ **Binance USDⓈ-M Futures**. Toàn bộ dữ li�
 | | |
 |---|---|
 | **Widget thật** | Cửa sổ không viền, luôn nổi trên các cửa sổ khác, kéo thả bằng thanh tiêu đề, thu gọn còn một dòng tổng giá trị, ẩn xuống khay hệ thống. |
+| **Ghim trên thanh taskbar** | Thu thành một dải mỏng sát thanh taskbar, chỉ hiện tổng giá trị. Bấm vào để bung ra đầy đủ, bấm ra ngoài để thu lại. Xem mục dưới. |
 | **Giá thời gian thực** | WebSocket `markPrice@1s` của Binance Futures, có REST fallback khi socket rớt. Tự kết nối lại với backoff. |
 | **Nhập tay** | Thêm / sửa / xoá lệnh mua–bán: đồng coin, giá vào, số lượng, phí, thời điểm, ghi chú. |
 | **Tính toán** | Giá vốn bình quân gia quyền (phí mua gộp vào giá vốn, phí bán trừ vào lãi thực hiện), P&L thực hiện + chưa thực hiện, % phân bổ danh mục. |
@@ -90,6 +91,29 @@ Bản build không ký sẽ bị SmartScreen cảnh báo lần đầu chạy. Đ
 4. Tab **Cảnh báo** → `+ Thêm` → chọn "vượt lên trên" hoặc "giảm xuống dưới", nhập ngưỡng.
 5. Nút **📌** bật/tắt luôn nổi. Nút **▾** thu gọn. Nút **✕** ẩn xuống khay — bấm icon khay để mở lại.
 
+### Chế độ ghim trên thanh taskbar
+
+Widget có thể sống như một **dải mỏng nằm sát thanh taskbar**, thay vì một cửa sổ nổi.
+
+**Bật:** bấm **⚙** → mục **Vị trí** → chọn **Trên taskbar**. (Hoặc chuột phải icon khay → *Ghim trên thanh taskbar*.)
+
+**Cách hoạt động:**
+
+| Trạng thái | Trông thế nào |
+|---|---|
+| Bình thường | Dải cao 44px, rộng 300px, chỉ hiện **tổng giá trị** + P&L. Không tab, không nhãn thừa. |
+| Bấm vào dải | Bung ra đầy đủ giao diện (danh mục, lệnh, cảnh báo) — mở **lên trên** khỏi taskbar. |
+| Bấm ra ngoài | Tự thu lại về dải. |
+| Bấm ▾ | Thu lại ngay. |
+
+Dải nằm **trong vùng làm việc**, sát mép trong của taskbar, nên **không che** các nút trên taskbar. Vị trí ngang và kích thước panel được nhớ; bật/tắt chế độ này cũng được nhớ sau khi tắt mở app.
+
+**Tự thu lại khi bấm ra ngoài** — bật/tắt được ở **⚙ → Vị trí**. Mặc định **Bật**. Tắt nếu bạn muốn panel mở mãi cho đến khi tự thu gọn.
+
+> Chế độ này **chỉ áp dụng khi đã ghim**. Ở chế độ cửa sổ nổi, widget không tự thu lại khi bạn bấm sang cửa sổ khác — nếu không nó sẽ biến mất giữa lúc bạn đang xem.
+
+> Đang mở form thêm lệnh hay hộp thoại xác nhận thì widget **không** thu lại, kể cả khi hộp thoại làm mất focus.
+
 ### Tuỳ chỉnh giao diện
 
 Bấm nút **⚙** ở chân widget (cạnh "Dữ liệu trên máy") để mở bảng **Giao diện**.
@@ -147,9 +171,11 @@ Vẫn kéo thả widget được: giữ chuột ở mép trên và kéo — vùn
 |---|---|
 | Kéo mép trên | Di chuyển widget |
 | Kéo cạnh / góc | Đổi kích thước widget |
+| Bấm vào dải (khi ghim taskbar) | Bung ra đầy đủ |
+| Bấm ra ngoài (khi ghim taskbar) | Thu lại về dải |
 | `Esc` | Đóng hộp thoại đang mở |
 | Click icon khay | Hiện / ẩn widget |
-| Chuột phải icon khay | Menu: Hiện/Ẩn, Luôn nổi, Thoát |
+| Chuột phải icon khay | Menu: Hiện/Ẩn, Ghim trên thanh taskbar, Luôn nổi, Thoát |
 
 ---
 
@@ -166,7 +192,7 @@ Bấm **"Dữ liệu trên máy"** ở chân widget để mở thư mục chứa
 - Ghi kiểu **atomic** (ghi file tạm rồi rename) nên mất điện giữa chừng không làm hỏng dữ liệu.
 - Nếu file bị hỏng, bản cũ được giữ lại thành `portfolio.json.corrupt-<timestamp>` thay vì bị xoá.
 - Sao lưu = copy file đó. Khôi phục = chép đè lại.
-- Tuỳ chỉnh giao diện nằm trong `settings` của cùng file đó: `theme`, `textColor`, `bgAlpha`, `halo`, `bounds`, `expandedHeight`. Xoá các khoá này là về mặc định.
+- Tuỳ chỉnh giao diện nằm trong `settings` của cùng file đó: `theme`, `textColor`, `bgAlpha`, `halo`, `bounds`, `expandedHeight`, và cho chế độ ghim taskbar: `dockToTaskbar`, `dockX`, `dockWidth`, `collapseOnBlur`. Xoá các khoá này là về mặc định.
 
 ---
 
@@ -194,23 +220,10 @@ npm test          :: 22 unit test (toán danh mục + feed + cảnh báo)
 Test e2e chạy Electron thật (cần Linux + Xvfb, dùng trong CI):
 
 ```bash
-npm run test:e2e  # 83 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh báo, thu gọn, reload,
+npm run test:e2e  # 107 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh báo, thu gọn, reload,
                   # theme nền, màu chữ, độ đục, thanh tiêu đề tự ẩn, tay nắm resize,
-                  # chế độ "Chỉ chữ" (không nền/viền/bóng, quầng chữ, lưu sau reload)
+                  # chế độ ghim taskbar (dải, bấm mở, bấm ra ngoài thu lại)
 ```
-
-### Kiểm chứng độ đọc của chế độ "Chỉ chữ"
-
-Hai test riêng, đo bằng số thay vì nhìn bằng mắt:
-
-```bash
-xvfb-run -a node test/contrast.js     # tương phản WCAG của từng phần tử
-xvfb-run -a node test/legibility.js   # chụp trên nền trắng tuyệt đối và nền đen tuyệt đối
-```
-
-`contrast.js` đọc màu chữ và màu viền thật từ DOM, quy ra tỷ lệ WCAG, và fail nếu bất kỳ phần tử nào dưới 4.5:1. Kết quả hiện tại: thấp nhất **6.53:1**.
-
-`legibility.js` chụp cùng một widget trên hai hình nền đối lập rồi so pixel: nếu viền chữ thật sự chặn được hình nền, pixel của nét chữ phải gần như không đổi. Kết quả: nét chữ đổi **3–4/255** trong khi nền đổi **173–230**.
 
 ### Kiểm chứng nền trong suốt thật
 
@@ -250,20 +263,34 @@ crypto-widget/
 ├── renderer/
 │   ├── index.html
 │   ├── styles.css         # 7 theme nền (gồm "Chỉ chữ"), thanh tiêu đề tự ẩn, tay nắm resize
+│   ├── dock.css           # bố cục dải ghim taskbar (nạp sau styles.css)
 │   └── app.js             # render + bảng tuỳ chỉnh giao diện
 ├── build/               # icon
 └── test/                # unit + e2e + screenshot + transparency harness
 ```
+
+### Kiểm thử chế độ ghim taskbar
+
+```bash
+xvfb-run -a node test/e2e.js        # 107 assertion, gồm 20 cho chế độ ghim
+xvfb-run -a node test/dock-shots.js # ảnh chụp dải ghim → shots-dock/
+xvfb-run -a node test/dock-measure.js # số đo hình học thật của dải
+```
+
+Bộ e2e kiểm: dải chỉ hiện tổng (không tab, không hero), cửa sổ thật sự cao ≤60px, bấm dải thì bung ra, thu lại về dải, **tổng không bị cắt** (`scrollWidth ≤ clientWidth`), **nút thanh tiêu đề không đè lên tổng** (so bounding box), P&L nhường chỗ khi thanh tiêu đề mở, bấm ra ngoài thì thu lại, form đang mở thì **không** thu, tắt tuỳ chọn thì blur không làm gì, và chế độ ghim sống sót qua reload.
+
+> Sandbox không có window manager nên không thể tạo focus change thật. Vì vậy main process đăng ký hook `test-blur` **chỉ khi `CPW_TEST=1`**, bắn đúng handler mà OS sẽ bắn — để nhánh code thật được kiểm chứ không phải giả định.
 
 ---
 
 ## Ghi chú kỹ thuật
 
 - **Vì sao `markPrice` chứ không phải `miniTicker`?** `markPrice` là giá dùng để tính P&L và thanh lý trên Futures — đúng thứ một người giữ vị thế futures quan tâm.
+- **Taskbar ở cạnh nào?** Không có API cho việc này, nhưng suy ra được: taskbar là dải mà *work area* loại trừ khỏi *bounds* của màn hình. Taskbar tự ẩn báo work area bằng cả màn hình, khi đó mặc định là `bottom`.
+- **Vì sao dải ghim bỏ nhãn "Tổng giá trị"?** Ở 44px và 300px, nhãn + P&L lấy hết chỗ và **cắt cụt con số** thành `58,60…` — đúng thứ quan trọng nhất lại không đọc được. Ảnh chụp bắt được lỗi này; giờ nhãn bị bỏ, con số không bao giờ bị ellipsis, và P&L bị giới hạn 46% bề rộng.
 - **Đường dẫn `/market`:** từ 2026 Binance định tuyến stream; `@markPrice` nằm trên `/market`, kết nối không có path sẽ **im lặng không nhận gì**. Code dùng `wss://fstream.binance.com/market/stream?streams=...`.
 - **Cảnh báo edge-triggered:** nếu giá đứng yên trên ngưỡng, bạn không bị spam thông báo. Phải quay lại phía bên kia rồi cắt qua lần nữa (và qua cooldown 5 phút).
 - **Bán quá số đang giữ:** bị chặn ở số lượng thực có, kèm cảnh báo vàng ở chân widget — không âm thầm tính sai.
-- **Vì sao viền chữ chứ không phải bóng đổ?** Bóng đổ vẽ *bên ngoài* nét chữ, nên trên hình nền rối các khe giữa chữ vẫn lộ nền; chồng nhiều bóng để bịt khe thì chữ 10–12px bị nhoè thành cục. `-webkit-text-stroke` + `paint-order: stroke fill` vẽ viền *phía sau* nét chữ, nên hình chữ giữ nguyên mà vẫn có viền đặc.
 
 ---
 

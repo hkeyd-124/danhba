@@ -1,111 +1,60 @@
 # Crypto Portfolio Widget
 
-Widget nhỏ gọn cho Windows để theo dõi portfolio crypto theo thời gian thực.
+Widget nhỏ gọn cho Windows để theo dõi danh mục đầu tư crypto theo thời gian thực.
 Giá lấy trực tiếp từ **Binance USDⓈ-M Futures**. Toàn bộ dữ liệu lưu trên máy.
+
+> Chạy `npm start` để mở widget. Ảnh giao diện: chạy `xvfb-run -a node test/shots.js` (Linux/CI) để tự sinh vào `shots/`.
 
 ---
 
-## ⚡ Cài đặt trên Windows — chọn 1 trong 2 cách
+## Tính năng
 
-### Cách A — Chạy bằng file .bat (dễ nhất, khuyến nghị)
+| | |
+|---|---|
+| **Widget thật** | Cửa sổ không viền, luôn nổi trên các cửa sổ khác, kéo thả bằng mép trên, thu gọn còn một dòng tổng giá trị, ẩn xuống khay hệ thống. |
+| **Giá thời gian thực** | WebSocket `markPrice@1s` của Binance Futures, có REST fallback khi socket rớt. Tự kết nối lại với backoff. |
+| **Nhập tay** | Thêm / sửa / xoá lệnh mua–bán: đồng coin, giá vào, số lượng, phí, thời điểm, ghi chú. |
+| **Tính toán** | Giá vốn bình quân gia quyền (phí mua gộp vào giá vốn, phí bán trừ vào lãi thực hiện), P&L thực hiện + chưa thực hiện, % phân bổ danh mục. |
+| **Cảnh báo giá** | Đặt ngưỡng trên/dưới cho từng đồng. Chạm ngưỡng → thông báo Windows + âm thanh. Chỉ bắn khi giá **cắt qua** ngưỡng, có cooldown 5 phút. |
+| **Giao diện tuỳ biến** | 6 kiểu nền (Đậm, Đen, Kính mờ, **Trong suốt**, Aurora, Sáng), độ đục nền 0–100%, 8 màu chữ dựng sẵn + bảng chọn màu tuỳ ý. Tất cả lưu trên máy. |
+| **Thanh tiêu đề tự ẩn** | Chỉ hiện khi rê chuột vào mép trên. Bình thường widget không có thanh tiêu đề — tối giản tối đa. |
+| **Kéo giãn cửa sổ** | Kéo 8 cạnh/góc để đổi kích thước, có nút "Về mặc định". Kích thước được nhớ. |
+| **Riêng tư** | Không tài khoản, không API key, không Firestore, không telemetry. Chỉ một kết nối ra ngoài duy nhất: Binance Futures. |
 
-1. Tải thư mục `crypto-widget` về máy (giải nén file zip, hoặc `git clone`).
-2. Mở thư mục đó. Bạn phải thấy các file: `package.json`, `main.js`, `preload.js`.
-3. **Nhấp đúp `RUN-WINDOWS.bat`**.
+---
 
-File `.bat` sẽ tự làm hết: kiểm tra Node.js, cài dependencies lần đầu, rồi mở widget.
-Không cần gõ lệnh, không cần `cd`.
+## Yêu cầu
 
-> Nếu Windows hiện "Windows protected your PC" → bấm **More info** → **Run anyway**.
+- **Windows 10/11 (64-bit)**
+- **Node.js 18+** (khuyến nghị 20 LTS) — chỉ cần khi build từ source
 
-### Cách B — Gõ lệnh thủ công
+---
+
+## Chạy nhanh (từ source)
 
 ```bat
-cd /d "đường_dẫn_đến_thư_mục_có_package.json"
+git clone https://github.com/hkeyd-124/danhba.git
+cd danhba\crypto-widget
 npm install
 npm start
 ```
 
-⚠️ **Quan trọng:** `npm install` phải chạy trong thư mục **có `package.json`**.
-Nếu bạn thấy lỗi `ENOENT ... Could not read package.json`, nghĩa là bạn đang ở sai thư mục.
-
----
-
-## 🩺 Lỗi thường gặp khi cài
-
-### `The system cannot find the path specified.`
-
-Bạn `cd` vào một đường dẫn không tồn tại. Nguyên nhân phổ biến nhất: **giải nén zip bị lồng thêm một cấp thư mục**.
-
-Khi giải nén `crypto-widget.zip` bằng "Extract All" vào `C:\`, Windows tạo ra:
-
-```
-C:\crypto-widget\              ← thư mục Windows tự tạo (theo tên file zip)
-└── crypto-widget\             ← thư mục THẬT chứa code
-    ├── package.json
-    ├── main.js
-    └── ...
-```
-
-Nên `cd C:\crypto-widget` **không** vào được thư mục code — phải là `C:\crypto-widget\crypto-widget`.
-
-**Cách kiểm tra:** mở thư mục trong File Explorer, bạn phải **nhìn thấy `package.json`**.
-Nếu chỉ thấy một thư mục con tên `crypto-widget`, hãy đi vào trong đó.
-
-**Cách sửa nhanh:** dùng `RUN-WINDOWS.bat` — nó tự `cd` về đúng thư mục của chính nó.
-
-### `npm error code ENOENT ... Could not read package.json`
-
-Bạn đang chạy `npm install` ở thư mục không có `package.json` (thường là `C:\Users\<tên_bạn>`).
-Đây **không phải lỗi của app** — chỉ là sai thư mục.
-
-**Sửa:**
-```bat
-cd /d "C:\crypto-widget\crypto-widget"
-dir package.json
-npm install
-```
-Lệnh `dir package.json` phải in ra thông tin file. Nếu báo "File Not Found" thì bạn vẫn ở sai chỗ.
-
-### `'npm' is not recognized as an internal or external command`
-
-Chưa cài Node.js, hoặc chưa mở lại cửa sổ lệnh sau khi cài.
-Tải **Node.js 20 LTS** tại https://nodejs.org/ → cài → **đóng hết** cửa sổ Command Prompt → mở lại.
-
-### `ERR_ELECTRON_BUILDER_CANNOT_EXECUTE` khi build
-
-Máy không đủ RAM cho mức nén mặc định của 7-Zip (`-mx=9` cần ~1 GB).
-Repo này đã đặt sẵn `"compression": "store"` trong `package.json` nên **không còn gặp lỗi này**.
-Nếu bạn đã sửa file và lỗi quay lại, kiểm tra dòng đó còn tồn tại không.
-
-### Thông báo Windows không hiện
-
-Windows chỉ hiển thị toast cho app có **shortcut trong Start Menu** mang đúng AppUserModelID.
-Bản **portable** (file .exe chạy trực tiếp) không có shortcut → Windows **âm thầm bỏ qua** thông báo.
-
-- **Cách sửa:** cài bằng bộ **Setup** (`Crypto Portfolio Widget Setup 1.0.0.exe`) thay vì bản portable.
-- **Dù thế nào**, app luôn có cảnh báo dự phòng: widget tự bật lên, nháy taskbar và bíp.
-- Tab **Cảnh báo** sẽ hiện một ô vàng giải thích nếu phát hiện tình huống này.
+`npm install` sẽ tải Electron (~200 MB) ở lần đầu.
 
 ---
 
 ## Build ra file .exe
 
 ```bat
-BUILD-WINDOWS.bat
-```
-
-hoặc thủ công:
-
-```bat
+cd crypto-widget
 npm install
 npm run dist
 ```
 
-Kết quả trong `dist\`:
+Kết quả trong thư mục `dist\`:
 
-- `Crypto Portfolio Widget Setup 1.0.0.exe` — bộ cài NSIS (tạo shortcut Desktop + Start Menu, cho chọn thư mục cài). **Dùng bản này để thông báo Windows hoạt động đầy đủ.**
-- `Crypto Portfolio Widget 1.0.0.exe` — bản **portable**, chạy ngay không cần cài.
+- `Crypto Portfolio Widget Setup 1.0.0.exe` — bộ cài NSIS (tạo shortcut Desktop + Start Menu, cho chọn thư mục cài)
+- `Crypto Portfolio Widget 1.0.0.exe` — bản **portable**, chạy ngay không cần cài
 
 Chỉ muốn bản portable:
 
@@ -119,43 +68,16 @@ npm run dist:portable
 > set HTTPS_PROXY=http://proxy:port
 > ```
 
+> **Nếu bước nén báo lỗi `ERR_ELECTRON_BUILDER_CANNOT_EXECUTE`:** máy build không đủ RAM cho mức nén mặc định (`-mx=9` cần ~1 GB trở lên). Thêm vào `package.json`:
+> ```json
+> "compression": "store"
+> ```
+> (hoặc `"normal"`), rồi chạy lại. File .exe sẽ lớn hơn nhưng build được trên máy yếu.
+
 ### Ký số (tuỳ chọn)
 
 Bản build không ký sẽ bị SmartScreen cảnh báo lần đầu chạy. Để ký, đặt các biến môi trường
 `CSC_LINK` (đường dẫn file .pfx) và `CSC_KEY_PASSWORD` rồi chạy lại `npm run dist`.
-
----
-
-## Tính năng
-
-| | |
-|---|---|
-| **Widget thật** | Cửa sổ không viền, luôn nổi trên các cửa sổ khác, kéo thả bằng thanh tiêu đề, thu gọn còn một dòng tổng giá trị, ẩn xuống khay hệ thống. |
-| **Giá thời gian thực** | WebSocket `markPrice@1s` của Binance Futures, có REST fallback khi socket rớt. Tự kết nối lại với backoff. |
-| **Nhập tay** | Thêm / sửa / xoá lệnh mua–bán: đồng coin, giá vào, số lượng, phí, thời điểm, ghi chú. |
-| **Tính toán** | Giá vốn bình quân gia quyền (phí mua gộp vào giá vốn, phí bán trừ vào lãi thực hiện), P&L thực hiện + chưa thực hiện, % phân bổ danh mục. |
-| **Cảnh báo giá** | Đặt ngưỡng trên/dưới cho từng đồng. Chạm ngưỡng → thông báo Windows + âm thanh. Chỉ bắn khi giá **cắt qua** ngưỡng, có cooldown 5 phút. |
-| **Riêng tư** | Không tài khoản, không API key, không Firestore, không telemetry. Chỉ một kết nối ra ngoài duy nhất: Binance Futures. |
-
----
-
-## Yêu cầu
-
-- **Windows 10/11 (64-bit)**
-- **Node.js 18+** (khuyến nghị 20 LTS) — chỉ cần khi build từ source
-
----
-
-## Chạy nhanh (từ source, dùng git)
-
-```bat
-git clone https://github.com/hkeyd-124/danhba.git
-cd danhba\crypto-widget
-npm install
-npm start
-```
-
-`npm install` sẽ tải Electron (~200 MB) ở lần đầu.
 
 ---
 
@@ -165,13 +87,43 @@ npm start
 2. Tab **Lệnh** → `+ Thêm lệnh` → nhập đồng coin (gõ `BTC` là đủ, tự thêm `USDT`), giá vào, số lượng, phí.
 3. Tab **Danh mục** hiện giá vốn, giá hiện tại, P&L và % phân bổ, cập nhật theo từng tick giá.
 4. Tab **Cảnh báo** → `+ Thêm` → chọn "vượt lên trên" hoặc "giảm xuống dưới", nhập ngưỡng.
-5. Nút **📌** bật/tắt luôn nổi. Nút **▾** thu gọn. Nút **✕** ẩn xuống khay — bấm icon khay để mở lại.
+5. Rê chuột vào **mép trên** để hiện thanh tiêu đề: **📌** bật/tắt luôn nổi, **▾** thu gọn, **✕** ẩn xuống khay — bấm icon khay để mở lại.
+
+### Tuỳ chỉnh giao diện
+
+Bấm nút **⚙** ở chân widget (cạnh "Dữ liệu trên máy") để mở bảng **Giao diện**.
+
+**Kiểu nền** — 6 lựa chọn:
+
+| Kiểu | Trông thế nào |
+|---|---|
+| **Đậm** | Nền xanh đen có quầng sáng, mặc định. |
+| **Đen** | Đen tuyệt đối, hợp màn hình OLED. |
+| **Kính mờ** | Nền bán trong suốt tông xanh. |
+| **Trong suốt** | Nhìn xuyên qua thấy desktop phía sau. |
+| **Aurora** | Dải màu chuyển sắc xanh–tím. |
+| **Sáng** | Nền sáng cho môi trường nhiều ánh sáng. |
+
+**Độ đục nền** — thanh trượt 0–100%. Kéo xuống thấp để nhìn xuyên qua desktop. Chọn kiểu *Trong suốt* lần đầu sẽ tự hạ độ đục xuống 35% để bạn thấy ngay tác dụng.
+
+**Màu chữ** — 8 ô màu dựng sẵn (trắng, trắng tinh, xanh nhạt, mint, vàng, hồng, than) hoặc bấm ô cầu vồng để chọn màu bất kỳ.
+
+**Kích thước** — kéo 8 cạnh/góc cửa sổ để đổi kích thước, hoặc bấm **Về mặc định** (420×660).
+
+> Mọi tuỳ chỉnh được ghi ngay vào `portfolio.json` và **giữ nguyên sau khi tắt mở app**.
+
+### Thanh tiêu đề tự ẩn
+
+Widget **không có thanh tiêu đề** khi bình thường — chỉ có nội dung. Rê chuột vào **mép trên** là thanh tiêu đề hiện ra (mờ dần trong 0.16 giây) với 3 nút: **📌** ghim, **▾** thu gọn, **✕** ẩn. Rời chuột là nó tự ẩn lại.
+
+Vẫn kéo thả widget được: giữ chuột ở mép trên và kéo — vùng đó luôn là tay nắm di chuyển, kể cả khi thanh tiêu đề đang ẩn.
 
 ### Phím tắt & thao tác
 
 | Thao tác | Kết quả |
 |---|---|
-| Kéo thanh tiêu đề | Di chuyển widget |
+| Kéo mép trên | Di chuyển widget |
+| Kéo cạnh / góc | Đổi kích thước widget |
 | `Esc` | Đóng hộp thoại đang mở |
 | Click icon khay | Hiện / ẩn widget |
 | Chuột phải icon khay | Menu: Hiện/Ẩn, Luôn nổi, Thoát |
@@ -191,6 +143,7 @@ Bấm **"Dữ liệu trên máy"** ở chân widget để mở thư mục chứa
 - Ghi kiểu **atomic** (ghi file tạm rồi rename) nên mất điện giữa chừng không làm hỏng dữ liệu.
 - Nếu file bị hỏng, bản cũ được giữ lại thành `portfolio.json.corrupt-<timestamp>` thay vì bị xoá.
 - Sao lưu = copy file đó. Khôi phục = chép đè lại.
+- Tuỳ chỉnh giao diện nằm trong `settings` của cùng file đó: `theme`, `textColor`, `bgAlpha`, `bounds`, `expandedHeight`. Xoá các khoá này là về mặc định.
 
 ---
 
@@ -203,6 +156,7 @@ Bấm **"Dữ liệu trên máy"** ở chân widget để mở thư mục chứa
 3. **`contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`.** Renderer không có `require`, không chạm được filesystem.
 4. **Không có API key, không có chữ ký request.** Chỉ đọc dữ liệu công khai của sàn — không thể đặt lệnh, không thể rút tiền.
 5. **Không telemetry, không analytics, không crash reporting.**
+6. **Tuỳ chỉnh giao diện không thêm kết nối nào.** Nền trong suốt, màu chữ, kích thước cửa sổ đều là CSS và API cửa sổ của Electron — không tải ảnh nền từ mạng, không gọi dịch vụ ngoài. Kết nối ra ngoài vẫn chỉ có Binance Futures.
 
 Muốn tự kiểm chứng: bật Wireshark/Resource Monitor và xem tiến trình chỉ nói chuyện với `binance.com`.
 
@@ -211,18 +165,15 @@ Muốn tự kiểm chứng: bật Wireshark/Resource Monitor và xem tiến trì
 ## Kiểm thử
 
 ```bat
-npm test
+npm test          :: 22 unit test (toán danh mục + feed + cảnh báo)
 ```
-
-22 unit test (toán danh mục + feed + cảnh báo).
 
 Test e2e chạy Electron thật (cần Linux + Xvfb, dùng trong CI):
 
 ```bash
-npm run test:e2e
+npm run test:e2e  # 61 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh báo, thu gọn, reload,
+                  # theme nền, màu chữ, độ đục, thanh tiêu đề tự ẩn, tay nắm resize
 ```
-
-33 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh báo, thu gọn, reload, và kiểm tra renderer bị chặn mạng.
 
 ---
 
@@ -230,9 +181,7 @@ npm run test:e2e
 
 ```
 crypto-widget/
-├── RUN-WINDOWS.bat      # chạy app bằng 1 cú nhấp đúp (tự cd, tự npm install)
-├── BUILD-WINDOWS.bat    # build ra .exe bằng 1 cú nhấp đúp
-├── main.js              # main process: cửa sổ, tray, IPC, thông báo
+├── main.js              # main process: cửa sổ trong suốt, tray, IPC, thông báo, resize
 ├── preload.js           # cầu nối hẹp giữa main và renderer
 ├── src/
 │   ├── portfolio.js     # toán danh mục (thuần, không I/O)
@@ -241,10 +190,9 @@ crypto-widget/
 │   └── store.js         # lưu JSON atomic
 ├── renderer/
 │   ├── index.html
-│   ├── styles.css
-│   └── app.js
-├── build/
-│   └── make-icons.js    # sinh icon bằng Node thuần (không cần binary trong repo)
+│   ├── styles.css         # 6 theme nền, thanh tiêu đề tự ẩn, tay nắm resize
+│   └── app.js             # render + bảng tuỳ chỉnh giao diện
+├── build/               # icon
 └── test/                # unit + e2e + screenshot harness
 ```
 
@@ -256,7 +204,9 @@ crypto-widget/
 - **Đường dẫn `/market`:** từ 2026 Binance định tuyến stream; `@markPrice` nằm trên `/market`, kết nối không có path sẽ **im lặng không nhận gì**. Code dùng `wss://fstream.binance.com/market/stream?streams=...`.
 - **Cảnh báo edge-triggered:** nếu giá đứng yên trên ngưỡng, bạn không bị spam thông báo. Phải quay lại phía bên kia rồi cắt qua lần nữa (và qua cooldown 5 phút).
 - **Bán quá số đang giữ:** bị chặn ở số lượng thực có, kèm cảnh báo vàng ở chân widget — không âm thầm tính sai.
-- **Icon:** sinh tự động bằng `build/make-icons.js` (Node thuần, không dependency), nên repo không chứa file nhị phân và icon không bao giờ lệch với source.
+- **Vì sao cửa sổ luôn `transparent: true`?** Để đổi kiểu nền không cần tạo lại cửa sổ — mọi kiểu nền đều do CSS vẽ, nên chuyển theme tức thì và không mất trạng thái (vị trí cuộn, ô đang gõ).
+- **Vì sao phải tự làm resize?** Cửa sổ trong suốt không viền **không có viền resize gốc của Windows**. Renderer vẽ 8 dải vô hình ở cạnh/góc; main process theo con trỏ chuột để đổi kích thước (một timer 16 ms, không gửi IPC mỗi lần di chuột).
+- **Vì sao thanh tiêu đề cần một dải cảm biến riêng?** Vùng `-webkit-app-region: drag` nuốt sự kiện chuột, nên bản thân thanh tiêu đề không tự phát hiện được hover. Dải `.tb-zone` nằm dưới, không phải vùng kéo, nên báo hover tin cậy; khi thanh hiện ra thì nó phủ lên dải đó và nhận việc kéo.
 
 ---
 

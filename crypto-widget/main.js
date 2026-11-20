@@ -40,6 +40,7 @@ const { Store } = require('./src/store');
 const { PriceFeed } = require('./src/feed');
 const { AlertEngine } = require('./src/alerts');
 const { computePositions, normalizeSymbol, symbolsInUse } = require('./src/portfolio');
+const role = require('./src/window-role');
 
 const IS_TEST = process.env.CPW_TEST === '1';
 const EXPANDED = { width: 420, height: 660 };
@@ -60,6 +61,17 @@ const MIN_HEIGHT_EXPANDED = 320;
 
 /** Placement modes. 'float' is the only one that is not docked. */
 const DOCK_MODES = ['float', 'edge', 'taskbar'];
+
+/**
+ * How often the environment is re-checked.
+ *
+ * Windows gives no event for "the taskbar moved", "the taskbar was resized",
+ * "explorer.exe restarted" or "the DPI changed on this monitor". The only
+ * reliable way to follow the taskbar is to re-measure it and compare. 2s is
+ * fast enough that a taskbar resize looks instant and slow enough to cost
+ * nothing (it is one arithmetic pass over the display metrics).
+ */
+const ENV_POLL_MS = 2000;
 
 /**
  * How often the portfolio value is sampled for the chart.
@@ -88,6 +100,45 @@ let historyTimer = null;
  */
 let blurGuard = 0;
 let blurArmedAt = 0;
+
+/**
+ * True when the USER hid the widget (tray menu, or the window's own hide
+ * action). The environment watcher must not undo that, but it must undo a hide
+ * that Windows performed on its own.
+ */
+let userHidden = false;
+
+/**
+ * True once the window has painted for the first time.
+ *
+ * The environment watcher re-shows a window that Windows hid, but it must not
+ * do that before the first paint: `showInactive()` on a window that has not
+ * finished loading shows an empty rectangle.
+ */
+let windowReady = false;
+
+/**
+ * The last value passed to setSkipTaskbar.
+ *
+ * Electron has no `isSkipTaskbar()` getter, so the applied value is tracked
+ * here. Without it the test hook could only report `null` and the assertion
+ * that a widget takes no taskbar slot would be untestable.
+ */
+let skipTaskbarApplied = null;
+
+// environment watcher
+let envTimer = null;
+let lastEnvKey = '';
+
+/**
+ * When the last placement was applied by us rather than by the user.
+ *
+ * `moved` fires for our own `setBounds` calls too, so without this the
+ * placement code would immediately persist its own derived position as if the
+ * user had dragged the strip there — turning a derived anchor into a fixed
+ * one, and pinning the widget to a stale x after a resolution change.
+ */
+let boundsAppliedAt = 0;
 
 // resize session
 let resizeTimer = null;
@@ -380,7 +431,7 @@ function createWindow() {
     maximizable: false,
     fullscreenable: false,
     alwaysOnTop: store.settings.alwaysOnTop !== false,
-    skipTaskbar: isInTaskbar(),
+    skipTaskbar: role.skipTaskbar(store.settings.widgetRole !== false, isDocked()),
     show: false,
     title: 'Crypto Portfolio',
     icon: path.join(__dirname, 'build', 'icon.png'),
@@ -399,6 +450,7 @@ function createWindow() {
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
   win.once('ready-to-show', () => {
+    windowReady = true;
     win.show();
     if (store.settings.collapsed) setCollapsed(true, { silent: true });
     // A window that has just appeared can emit a blur before the user has
@@ -448,7 +500,12 @@ function createWindow() {
     if (isDocked()) {
       // In dock mode the vertical position is derived from the taskbar, so
       // only the horizontal offset and the panel size are worth remembering.
-      store.patchSettings({ dockX: x });
+      //
+      // The x is only remembered when the user actually dragged the strip:
+      // `moved` also fires for our own placements, and writing dockX then would
+      // silently turn a derived anchor into a fixed one.
+      const userMoved = Date.now() - boundsAppliedAt > 400;
+      if (userMoved) store.patchSettings({ dockX: x });
       if (!collapsed) store.patchSettings({ expandedHeight: height, dockWidth: width });
       return;
     }
@@ -460,18 +517,128 @@ function createWindow() {
 }
 
 /**
- * Keep the window above the taskbar.
+ * Apply the window's role: is it a widget, or an ordinary window?
  *
- * A normal 'floating' level sits below the taskbar, which is exactly why the
- * 'edge' strip had to live inside the work area. 'taskbar' mode draws over the
- * taskbar's own rectangle, so it needs a level above it — 'screen-saver' is
- * the highest Electron exposes.
+ * Three separate things make a window behave like a taskbar widget rather than
+ * an app, and all three are needed:
+ *
+ *   1. No taskbar button and no Alt+Tab entry -> `setSkipTaskbar(true)`. This
+ *      is the mechanism that actually works on Windows; see the long note at
+ *      the top of src/window-role.js for why `type: 'toolbar'` is not.
+ *   2. Never covered by another window -> always-on-top at the 'screen-saver'
+ *      level, the only level above the taskbar.
+ *   3. Never hidden by Windows on its own -> the environment watcher re-shows
+ *      it (see reassertWidgetRole), while respecting a hide the user asked for.
+ *
+ * `alwaysOnTop` is the user's own switch and is respected: turning it off is a
+ * deliberate choice to let other windows cover the widget.
  */
-function applyTopLevel() {
+function applyWidgetRole() {
   if (!win || win.isDestroyed()) return;
+
+  const widget = store.settings.widgetRole !== false;
   const on = store.settings.alwaysOnTop !== false;
+
+  // A docked widget must never take a taskbar slot, whatever the user chose:
+  // it is drawn over the taskbar, so a button for it would be nonsense.
+  win.setSkipTaskbar(role.skipTaskbar(widget, isDocked()));
+  skipTaskbarApplied = role.skipTaskbar(widget, isDocked());
+
   if (!on) { win.setAlwaysOnTop(false); return; }
-  win.setAlwaysOnTop(true, isInTaskbar() ? 'screen-saver' : 'floating');
+
+  // 'screen-saver' is the highest level Electron exposes, and the only one
+  // that sits above the taskbar itself. 'floating' is enough for a free panel
+  // that is not trying to live on the taskbar.
+  win.setAlwaysOnTop(true, role.topLevel(widget, isInTaskbar()), 1);
+}
+
+/** Backwards-compatible alias: the old name is used in several call sites. */
+function applyTopLevel() {
+  applyWidgetRole();
+}
+
+/**
+ * A stable fingerprint of everything the widget's placement depends on.
+ *
+ * Comparing this each poll is what makes the widget follow the taskbar: a
+ * resize, an edge change, a resolution change, a DPI change and an
+ * explorer.exe restart all show up here as a different string.
+ */
+function environmentKey() {
+  const tb = taskbarRect();
+  const d = screen.getPrimaryDisplay();
+  return [
+    tb.x, tb.y, tb.width, tb.height, tb.edge,
+    d.bounds.width, d.bounds.height, d.scaleFactor,
+    d.workArea.x, d.workArea.y, d.workArea.width, d.workArea.height,
+  ].join(':');
+}
+
+/**
+ * Re-assert the widget's z-order.
+ *
+ * Windows silently drops the topmost flag in several situations that a widget
+ * has to survive: explorer.exe restarting (the taskbar is recreated), a
+ * fullscreen app taking over, a UAC prompt, a display mode change. There is no
+ * event for any of them, so the flag is simply re-applied on every poll. It is
+ * a cheap call and it is idempotent.
+ */
+function reassertWidgetRole() {
+  if (!win || win.isDestroyed()) return;
+  if (store.settings.widgetRole === false) return;
+  if (store.settings.alwaysOnTop === false) return;
+
+  win.setAlwaysOnTop(true, 'screen-saver', 1);
+  if (isDocked()) win.setSkipTaskbar(true);
+
+  // If Windows hid the window (rather than the user hiding it from the tray),
+  // bring it back. `userHidden` is what separates the two, and `windowReady`
+  // stops this from showing an empty rectangle before the first paint.
+  if (role.shouldReshow({
+    ready: windowReady,
+    visible: win.isVisible(),
+    userHidden,
+    widgetRole: store.settings.widgetRole !== false,
+  })) {
+    win.showInactive();
+  }
+}
+
+/**
+ * Follow the taskbar.
+ *
+ * Two triggers, because neither alone is enough:
+ *   - `screen` events fire for resolution / DPI / monitor changes, and are
+ *     immediate.
+ *   - the poll catches what has no event at all: the taskbar being resized,
+ *     moved to another edge, or explorer.exe restarting.
+ */
+function watchEnvironment() {
+  const onDisplayChange = () => {
+    if (!win || win.isDestroyed()) return;
+    lastEnvKey = environmentKey();
+    if (isDocked()) applyDockBounds();
+    else if (!collapsed) {
+      const b = clampToScreen(win.getBounds());
+      if (b) win.setBounds(b, true);
+    }
+    reassertWidgetRole();
+  };
+
+  screen.on('display-metrics-changed', onDisplayChange);
+  screen.on('display-added', onDisplayChange);
+  screen.on('display-removed', onDisplayChange);
+
+  clearInterval(envTimer);
+  envTimer = setInterval(() => {
+    if (!win || win.isDestroyed()) return;
+    const key = environmentKey();
+    if (key !== lastEnvKey) {
+      lastEnvKey = key;
+      if (isDocked()) applyDockBounds();
+    }
+    reassertWidgetRole();
+  }, ENV_POLL_MS);
 }
 
 function setCollapsed(next, opts = {}) {
@@ -520,12 +687,14 @@ function applyDockBounds() {
   if (collapsed) {
     const r = placementBounds();
     win.setMinimumSize(MIN_WIDTH_DOCKED, r.height);
+    boundsAppliedAt = Date.now();
     win.setBounds(r, true);
     return;
   }
 
   const r = dockPanelRect();
   win.setMinimumSize(MIN_WIDTH, MIN_HEIGHT_EXPANDED);
+  boundsAppliedAt = Date.now();
   win.setBounds(r, true);
 }
 
@@ -602,7 +771,11 @@ function stopResize(persist) {
 // ---------------------------------------------------------------- tray
 function trayTemplate() {
   return [
-    { label: 'Hiện / Ẩn', click: () => (win && win.isVisible() ? win.hide() : win && win.show()) },
+    { label: 'Hiện / Ẩn', click: () => {
+      if (!win) return;
+      if (win.isVisible()) { userHidden = true; win.hide(); }
+      else { userHidden = false; win.show(); }
+    } },
     { type: 'separator' },
     { label: 'Vị trí', enabled: false },
     { label: 'Cửa sổ nổi', type: 'radio', checked: dockMode() === 'float',
@@ -659,7 +832,7 @@ function setDockMode(mode) {
     const saved = clampToScreen(store.settings.bounds) || defaultBounds();
     collapsed = false;
     store.patchSettings({ collapsed: false });
-    win.setSkipTaskbar(false);
+    win.setSkipTaskbar(store.settings.widgetRole !== false);
     applyTopLevel();
     win.setMinimumSize(MIN_WIDTH, MIN_HEIGHT_EXPANDED);
     win.setBounds(saved, true);
@@ -826,6 +999,16 @@ function registerIpc() {
       allowed.halo = Math.min(100, Math.max(0, Math.round(p.halo)));
     }
     if (typeof p.collapseOnBlur === 'boolean') allowed.collapseOnBlur = p.collapseOnBlur;
+    if (typeof p.widgetRole === 'boolean') {
+      allowed.widgetRole = p.widgetRole;
+      store.patchSettings(allowed);
+      // Applied immediately: setSkipTaskbar and the z-order level are both
+      // runtime calls. A restart is only a fallback for the Alt+Tab list, which
+      // the shell may keep until the window is re-registered.
+      applyWidgetRole();
+      pushState();
+      return { ok: true, settings: store.settings, applied: true };
+    }
     if (typeof p.chart === 'boolean') allowed.chart = p.chart;
     if (typeof p.chartRange === 'number' && Number.isFinite(p.chartRange)) {
       allowed.chartRange = Math.min(60, Math.max(5, Math.round(p.chartRange)));
@@ -875,7 +1058,10 @@ function registerIpc() {
         mode: dockMode(),
         collapsed,
         alwaysOnTop: win.isAlwaysOnTop(),
-        skipTaskbar: true,
+        skipTaskbar: skipTaskbarApplied,
+        visible: win.isVisible(),
+        widgetRole: store.settings.widgetRole !== false,
+        envKey: environmentKey(),
       };
     });
   }
@@ -886,7 +1072,7 @@ function registerIpc() {
       case 'collapse': setCollapsed(!collapsed); break;
       case 'expand': setCollapsed(false); break;
       case 'minimize': win.minimize(); break;
-      case 'hide': win.hide(); break;
+      case 'hide': userHidden = true; win.hide(); break;
       case 'close': quitting = true; app.quit(); break;
       case 'pin': {
         const next = !win.isAlwaysOnTop();
@@ -980,6 +1166,7 @@ app.whenReady().then(() => {
   registerIpc();
   createWindow();
   createTray();
+  watchEnvironment();
   refreshSymbols();
   feed.start();
   startHistorySampler();
@@ -991,6 +1178,7 @@ app.on('before-quit', () => {
   quitting = true;
   stopResize(false);
   clearInterval(historyTimer);
+  clearInterval(envTimer);
   if (store) store.flush();
   if (feed) feed.stop();
 });

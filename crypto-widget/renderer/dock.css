@@ -151,13 +151,21 @@
   padding: 0 12px;
   gap: 8px;
   /*
-   * The strip is ~40px tall and holds two different type sizes. `center` on a
-   * flex row aligns the BOXES, not the baselines, so the 14px total and the
-   * 11px P&L ended up on different baselines — a visual check caught the
-   * "stair-step". `baseline` puts them on one line, which is what the eye
-   * reads as aligned.
+   * `center`, NOT `baseline`.
+   *
+   * The strip holds two different type sizes, so the first instinct was
+   * `align-items: baseline` to stop the 14px total and the 11px P&L sitting on
+   * a "stair-step". That fixed the baselines and broke the vertical centring:
+   * with baseline alignment the flex line's cross-size is only as tall as the
+   * text, and the line is placed at the TOP of the container. Measured, the
+   * content sat at y 0-16 inside a 44px strip — 14px above centre, with a
+   * visible void underneath.
+   *
+   * The baselines are still aligned, just one level down: each of the two
+   * groups (cv-left, cv-right) is its own baseline-aligned flex row, and the
+   * row itself is centred. That gives both.
    */
-  align-items: baseline;
+  align-items: center;
 }
 .widget.is-taskbar .cv-left { align-items: baseline; }
 .widget.is-taskbar .cv-right { align-items: baseline; }

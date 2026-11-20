@@ -21,8 +21,9 @@
     </div>
   </header>
 
-  <!-- ============ collapsed summary ============ -->
-  <section class="collapsed-view" id="collapsedView" hidden>
+  <!-- ============ collapsed summary (also the docked taskbar strip) ============ -->
+  <section class="collapsed-view" id="collapsedView" hidden role="button" tabindex="0"
+           title="Bấm để mở rộng">
     <div class="cv-left">
       <div class="cv-label">Tổng giá trị</div>
       <div class="cv-value" id="cvValue">—</div>
@@ -155,6 +156,24 @@
           </label>
         </div>
       </div>
+
+      <div class="field">
+        <span>Vị trí</span>
+        <div class="seg" id="dockSeg">
+          <button type="button" class="seg-btn" data-dock="0">Cửa sổ nổi</button>
+          <button type="button" class="seg-btn" data-dock="1">Trên taskbar</button>
+        </div>
+        <em class="hint">“Trên taskbar”: thu thành một dải mỏng sát thanh taskbar, chỉ hiện tổng giá trị. Bấm vào để bung ra, bấm ra ngoài để thu lại.</em>
+      </div>
+
+      <label class="field" id="blurField">
+        <span>Tự thu lại khi bấm ra ngoài</span>
+        <div class="seg" id="blurSeg">
+          <button type="button" class="seg-btn" data-blur="1">Bật</button>
+          <button type="button" class="seg-btn" data-blur="0">Tắt</button>
+        </div>
+        <em class="hint">Tắt nếu bạn muốn widget mở mãi cho đến khi tự thu gọn.</em>
+      </label>
 
       <div class="field">
         <span>Kích thước</span>

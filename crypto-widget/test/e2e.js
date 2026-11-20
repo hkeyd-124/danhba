@@ -358,6 +358,236 @@ async function findTarget(port, tries = 60) {
     check('the total value is shown exactly once', noDup.visibleTotals === 1,
       `visible=${noDup.visibleTotals}`);
 
+    // ---------- 7b. taskbar dock mode
+    //
+    // Docking is a placement mode on the SAME window, so this checks the three
+    // things the user asked for: the strip shows only the total, clicking it
+    // expands the full UI, and collapsing returns it to the strip.
+    await cdp.eval(`await window.cpw.patchSettings({ dockToTaskbar: true }); return true;`);
+    await wait(700);
+    const docked = await cdp.eval(`
+      const w = document.getElementById('widget');
+      const cv = document.getElementById('collapsedView');
+      return {
+        dockedClass: w.classList.contains('is-docked'),
+        collapsed: w.classList.contains('is-collapsed'),
+        bodyHidden: getComputedStyle(document.getElementById('body')).display === 'none',
+        stripVisible: cv.offsetParent !== null,
+        stripText: cv.innerText.replace(/\\s+/g, ' ').trim(),
+        // the strip must not show the tabs or the hero block
+        tabsVisible: document.querySelector('.tabs').offsetParent !== null,
+        heroVisible: document.querySelector('.hero').offsetParent !== null,
+      };
+    `);
+    check('dock mode marks the widget as docked', docked.dockedClass, JSON.stringify(docked));
+    check('dock mode starts collapsed', docked.collapsed && docked.bodyHidden, JSON.stringify(docked));
+    check('the docked strip is visible', docked.stripVisible);
+    check('the docked strip shows the total value', docked.stripText.includes('76,000'), docked.stripText);
+    check('the docked strip hides the tabs', !docked.tabsVisible);
+    check('the docked strip hides the hero block', !docked.heroVisible);
+
+    // the window itself must be a thin strip, not the full panel
+    const stripBounds = await cdp.eval(`
+      return { w: window.outerWidth, h: window.outerHeight };
+    `);
+    check('the docked window is a thin strip', stripBounds.h <= 60 && stripBounds.h > 20,
+      JSON.stringify(stripBounds));
+
+    // clicking the strip expands the full UI
+    await cdp.eval(`document.getElementById('collapsedView').click(); return true;`);
+    await wait(700);
+    const afterStripClick = await cdp.eval(`
+      const w = document.getElementById('widget');
+      return {
+        collapsed: w.classList.contains('is-collapsed'),
+        bodyVisible: getComputedStyle(document.getElementById('body')).display !== 'none',
+        tabsVisible: document.querySelector('.tabs').offsetParent !== null,
+        h: window.outerHeight,
+      };
+    `);
+    check('clicking the strip expands the full UI',
+      !afterStripClick.collapsed && afterStripClick.bodyVisible && afterStripClick.tabsVisible,
+      JSON.stringify(afterStripClick));
+    check('the expanded docked panel is taller than the strip',
+      afterStripClick.h > 300, `h=${afterStripClick.h}`);
+
+    // collapsing returns to the strip, and the strip is still the total only
+    await cdp.eval(`await window.cpw.window('collapse'); return true;`);
+    await wait(700);
+    const backToStrip = await cdp.eval(`
+      const w = document.getElementById('widget');
+      return {
+        collapsed: w.classList.contains('is-collapsed'),
+        h: window.outerHeight,
+        stripText: document.getElementById('collapsedView').innerText.replace(/\\s+/g, ' ').trim(),
+      };
+    `);
+    check('collapsing returns to the thin strip',
+      backToStrip.collapsed && backToStrip.h <= 60, JSON.stringify(backToStrip));
+    check('the strip still shows the total after collapsing',
+      backToStrip.stripText.includes('76,000'), backToStrip.stripText);
+
+    // the docked strip must not be covered by the auto-hiding title bar:
+    // the bar is transparent at rest, so the numbers stay readable.
+    const stripBar = await cdp.eval(`
+      const tb = document.getElementById('titlebar');
+      return { opacity: getComputedStyle(tb).opacity, h: tb.getBoundingClientRect().height };
+    `);
+    check('the title bar stays hidden over the docked strip',
+      Number(stripBar.opacity) === 0, JSON.stringify(stripBar));
+
+    // Regression: the total must never be truncated. A visual check caught the
+    // first version showing "58,60…" because the label and P&L took the width.
+    const totalFit = await cdp.eval(`
+      const v = document.getElementById('cvValue');
+      const cs = getComputedStyle(v);
+      return {
+        text: v.textContent,
+        scrollW: v.scrollWidth,
+        clientW: v.clientWidth,
+        overflow: cs.textOverflow,
+        labelHidden: getComputedStyle(document.querySelector('.cv-label')).display === 'none',
+      };
+    `);
+    check('the docked total is not truncated',
+      totalFit.scrollW <= totalFit.clientW + 1 && totalFit.overflow === 'clip',
+      JSON.stringify(totalFit));
+    check('the redundant label is dropped in the strip', totalFit.labelHidden);
+
+    // Regression: the title-bar buttons used to sit on top of the numbers
+    // (buttons y 0-20, value y 13-31). While the bar is open the P&L yields.
+    await cdp.eval(`
+      document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 150, clientY: 3 }));
+      return true;
+    `);
+    await wait(500);
+    const barOverStrip = await cdp.eval(`
+      const r = (el) => { const b = el.getBoundingClientRect(); return { top: b.top, bottom: b.bottom, left: b.left, right: b.right }; };
+      const v = r(document.getElementById('cvValue'));
+      const btns = [...document.querySelectorAll('#titlebar .wbtn')].map(r);
+      const hits = btns.filter((b) => !(b.right < v.left || b.left > v.right || b.bottom < v.top || b.top > v.bottom));
+      return {
+        hits: hits.length,
+        pnlOpacity: getComputedStyle(document.querySelector('.cv-right')).opacity,
+        barShown: document.getElementById('titlebar').classList.contains('is-shown'),
+      };
+    `);
+    check('the title-bar buttons do not cover the docked total',
+      barOverStrip.hits === 0 && barOverStrip.barShown, JSON.stringify(barOverStrip));
+    check('the P&L yields while the title bar is open',
+      barOverStrip.pnlOpacity === '0', JSON.stringify(barOverStrip));
+
+    // and it comes back when the bar hides again
+    await cdp.eval(`
+      document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 150, clientY: 40 }));
+      return true;
+    `);
+    await wait(600);
+    const pnlBack = await cdp.eval(`
+      return {
+        pnlOpacity: getComputedStyle(document.querySelector('.cv-right')).opacity,
+        barShown: document.getElementById('titlebar').classList.contains('is-shown'),
+      };
+    `);
+    check('the P&L returns once the title bar hides',
+      pnlBack.pnlOpacity === '1' && !pnlBack.barShown, JSON.stringify(pnlBack));
+
+    // ---------- 7c. click-outside-to-collapse (the real blur handler)
+    //
+    // The sandbox runs with no window manager, so clicking on the desktop can
+    // never produce an OS focus change here. `testBlur` fires the very handler
+    // the OS fires, so these assertions cover the real code path.
+    await cdp.eval(`await window.cpw.window('expand'); return true;`);
+    await wait(700);
+
+    const beforeBlur = await cdp.eval(`
+      return { collapsed: document.getElementById('widget').classList.contains('is-collapsed') };
+    `);
+    check('the docked panel is open before the blur test', !beforeBlur.collapsed);
+
+    // a modal must shield the widget from collapsing
+    await cdp.eval(`document.getElementById('btnAddTrade').click(); return true;`);
+    await wait(500);
+    await cdp.eval(`await window.cpw.testBlur(); return true;`);
+    await wait(600);
+    const blurredWithModal = await cdp.eval(`
+      return {
+        collapsed: document.getElementById('widget').classList.contains('is-collapsed'),
+        modalOpen: !document.getElementById('tradeModal').hidden,
+      };
+    `);
+    check('an open form stops click-outside from collapsing the widget',
+      !blurredWithModal.collapsed && blurredWithModal.modalOpen,
+      JSON.stringify(blurredWithModal));
+
+    // close the form, then a blur really does collapse it
+    await cdp.eval(`document.querySelector('#tradeModal [data-close]').click(); return true;`);
+    await wait(600);
+    const afterBlur = await cdp.eval(`
+      await window.cpw.testBlur();
+      await new Promise((r) => setTimeout(r, 500));
+      return {
+        collapsed: document.getElementById('widget').classList.contains('is-collapsed'),
+        bodyHidden: getComputedStyle(document.getElementById('body')).display === 'none',
+        h: window.outerHeight,
+      };
+    `);
+    check('clicking outside collapses the docked widget back to the strip',
+      afterBlur.collapsed && afterBlur.bodyHidden && afterBlur.h <= 60,
+      JSON.stringify(afterBlur));
+
+    // with the opt-out turned on, blur must do nothing
+    await cdp.eval(`
+      await window.cpw.patchSettings({ collapseOnBlur: false });
+      await window.cpw.window('expand');
+      return true;
+    `);
+    await wait(700);
+    const afterBlurDisabled = await cdp.eval(`
+      await window.cpw.testBlur();
+      await new Promise((r) => setTimeout(r, 500));
+      return { collapsed: document.getElementById('widget').classList.contains('is-collapsed') };
+    `);
+    check('turning the opt-out off keeps the panel open on blur',
+      !afterBlurDisabled.collapsed, JSON.stringify(afterBlurDisabled));
+    await cdp.eval(`await window.cpw.patchSettings({ collapseOnBlur: true }); return true;`);
+    await wait(300);
+
+    // dock mode must survive a restart, not just a re-render
+    await cdp.eval(`await window.cpw.window('collapse'); return true;`);
+    await wait(500);
+    await cdp.send('Page.reload');
+    await wait(2000);
+    const dockAfterReload = await cdp.eval(`
+      const w = document.getElementById('widget');
+      return {
+        docked: w.classList.contains('is-docked'),
+        collapsed: w.classList.contains('is-collapsed'),
+        h: window.outerHeight,
+        stripText: document.getElementById('collapsedView').innerText.replace(/\\s+/g, ' ').trim(),
+      };
+    `);
+    check('dock mode survives a reload',
+      dockAfterReload.docked && dockAfterReload.collapsed && dockAfterReload.h <= 60,
+      JSON.stringify(dockAfterReload));
+    check('the reloaded strip still shows the total',
+      dockAfterReload.stripText.includes('76,000'), dockAfterReload.stripText);
+
+    await cdp.eval(`await window.cpw.patchSettings({ dockToTaskbar: false }); return true;`);
+    await wait(700);
+    const undocked = await cdp.eval(`
+      const w = document.getElementById('widget');
+      return {
+        dockedClass: w.classList.contains('is-docked'),
+        collapsed: w.classList.contains('is-collapsed'),
+        bodyVisible: getComputedStyle(document.getElementById('body')).display !== 'none',
+        h: window.outerHeight,
+      };
+    `);
+    check('turning dock mode off restores the floating window',
+      !undocked.dockedClass && !undocked.collapsed && undocked.bodyVisible && undocked.h > 300,
+      JSON.stringify(undocked));
+
     // ---------- 8. persistence across a reload
     await cdp.send('Page.reload');
     await wait(2000);
@@ -484,9 +714,12 @@ async function findTarget(port, tries = 60) {
       `h=${tbState.barH}`);
 
     // simulate the pointer reaching the top edge
+    //
+    // The app now detects hover from a document-level mousemove (the old
+    // sensor element swallowed clicks, which broke the 44px docked strip), so
+    // the test drives the same event the real pointer would produce.
     await cdp.eval(`
-      const zone = document.getElementById('tbZone');
-      zone.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+      document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 200, clientY: 4 }));
       return true;
     `);
     await wait(300);

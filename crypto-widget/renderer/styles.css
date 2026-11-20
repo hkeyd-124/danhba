@@ -142,16 +142,21 @@ input { user-select: text; cursor: text; }
 }
 
 /*
- * Hover sensor. A `-webkit-app-region: drag` element swallows mouse events, so
- * the bar itself cannot detect the pointer. This invisible strip sits under it
- * and is NOT a drag region, so it reliably reports hover; once the bar is
- * visible it covers the strip and takes over dragging.
+ * Hover sensor.
+ *
+ * A `-webkit-app-region: drag` element swallows mouse events, so the bar itself
+ * cannot detect the pointer. This strip used to be a real element, but that
+ * made it swallow CLICKS too — in dock mode the strip is only 44px tall, so a
+ * 20px sensor covered the top half of the summary and clicking there did
+ * nothing. It is now purely decorative (pointer-events: none) and the hover is
+ * detected from a mousemove listener on the document instead.
  */
 .tb-zone {
   position: absolute;
   top: 0; left: 0; right: 0;
   height: var(--tb-h);
   z-index: 30;
+  pointer-events: none;
   -webkit-app-region: no-drag;
 }
 /*
@@ -190,6 +195,7 @@ input { user-select: text; cursor: text; }
 .collapsed-view {
   display: flex; align-items: center; justify-content: space-between;
   gap: 10px; padding: 10px 16px 14px; flex: 1 1 auto;
+  cursor: pointer;
 }
 /*
  * `display: flex` above would otherwise beat the `hidden` attribute, which is
@@ -197,6 +203,7 @@ input { user-select: text; cursor: text; }
  * total value twice. This rule must stay after the one above.
  */
 .collapsed-view[hidden] { display: none; }
+.collapsed-view:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .cv-label { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px; }
 .cv-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
 .cv-right { text-align: right; }
@@ -521,6 +528,12 @@ input[type="range"]::-webkit-slider-thumb {
  * "Chỉ chữ" — the widget paints NO surface at all: no background, no border,
  * no radius, no shadow. Every pixel that is not text is fully transparent, so
  * the desktop shows straight through.
+ *
+ * Legibility is handled by a text halo (text-shadow, which inherits, so one
+ * declaration covers every label) whose colour is chosen in app.js from the
+ * luminance of the chosen text colour: light text gets a dark halo, dark text
+ * gets a light one. That is what keeps the numbers readable on a white
+ * wallpaper and on a black one with the same setting.
  */
 .widget[data-theme="bare"] {
   background: none;
@@ -582,7 +595,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .widget[data-theme="bare"] .tab:hover { background: rgba(127, 140, 165, .16); }
 
-/* pills lose their fill; the colour alone carries up/down */
+/* pills keep a faint tint so P&L still reads as up/down at a glance */
 .widget[data-theme="bare"] .pill {
   background: none;
   padding: 0;
@@ -599,6 +612,18 @@ input[type="range"]::-webkit-slider-thumb {
 .widget[data-theme="bare"] .pos { margin-bottom: 12px; padding: 4px 2px; }
 .widget[data-theme="bare"] .trade { margin-bottom: 10px; padding: 4px 2px; }
 .widget[data-theme="bare"] .alert { margin-bottom: 10px; padding: 4px 2px; }
+
+/* small text needs a touch more weight once it has no surface behind it */
+.widget[data-theme="bare"] .pos-qty,
+.widget[data-theme="bare"] .pos-sub,
+.widget[data-theme="bare"] .trade-meta,
+.widget[data-theme="bare"] .alert-meta,
+.widget[data-theme="bare"] .hero-label,
+.widget[data-theme="bare"] .hero-status,
+.widget[data-theme="bare"] .cv-label,
+.widget[data-theme="bare"] .cv-pct,
+.widget[data-theme="bare"] .muted,
+.widget[data-theme="bare"] .hint { font-weight: 500; }
 
 /**
  * Small text is the hard case: at 10.5px a 1.5px outline eats most of the

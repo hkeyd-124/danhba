@@ -253,23 +253,133 @@ function renderSettings() {
   $('collapsedView').hidden = !state.collapsed;
   $('btnCollapse').textContent = state.collapsed ? '▴' : '▾';
   $('btnCollapse').title = state.collapsed ? 'Mở rộng' : 'Thu gọn';
-
-  // Windows drops toasts for an app with no Start Menu shortcut (portable
-  // build). Say so instead of letting the user think alerts are broken.
-  const n = state.notif || {};
-  const warn = $('notifWarn');
-  if (warn) {
-    if (n.supported === false) {
-      warn.hidden = false;
-      warn.textContent = 'Máy này không hỗ trợ thông báo hệ thống. Cảnh báo vẫn hiện trong widget kèm tiếng bíp.';
-    } else if (n.portable) {
-      warn.hidden = false;
-      warn.textContent = 'Bản portable không có shortcut Start Menu nên Windows có thể bỏ qua thông báo. Cài bằng bộ Setup để nhận thông báo đầy đủ — cảnh báo vẫn hiện trong widget kèm tiếng bíp.';
-    } else {
-      warn.hidden = true;
-    }
-  }
+  applyLook(s);
 }
+
+// ------------------------------------------------------------------ appearance
+/**
+ * Every appearance setting is painted here, from CSS variables and a
+ * data-theme attribute. Nothing is re-created, so switching a theme never
+ * loses scroll position, focus, or an open form.
+ */
+const THEME_HINT = {
+  solid: 'Nền đặc, không nhìn xuyên qua.',
+  midnight: 'Đen tuyệt đối, hợp màn hình OLED.',
+  glass: 'Kính mờ — nền bán trong suốt, tông xanh.',
+  clear: 'Trong suốt — nhìn xuyên qua thấy desktop.',
+  aurora: 'Dải màu chuyển sắc xanh–tím.',
+  light: 'Nền sáng cho môi trường nhiều ánh sáng.',
+};
+
+function applyLook(s) {
+  const theme = THEME_HINT[s.theme] ? s.theme : 'solid';
+  const w = $('widget');
+  w.dataset.theme = theme;
+
+  // Background opacity: only meaningful for the see-through themes.
+  const alpha = Number.isFinite(Number(s.bgAlpha)) ? Number(s.bgAlpha) : 1;
+  w.style.setProperty('--bg-alpha', String(Math.min(1, Math.max(0, alpha))));
+
+  // Text colour drives --text; muted tones are derived so contrast stays sane.
+  const color = /^#[0-9a-f]{6}$/i.test(String(s.textColor || '')) ? s.textColor : '#e8eefc';
+  w.style.setProperty('--text', color);
+
+  // Reflect the current values in the controls.
+  document.querySelectorAll('.theme').forEach((b) => {
+    b.classList.toggle('is-active', b.dataset.theme === theme);
+  });
+  $('themeHint').textContent = THEME_HINT[theme];
+
+  const pct = Math.round(alpha * 100);
+  $('alphaRange').value = String(pct);
+  $('alphaVal').textContent = `${pct}%`;
+
+  document.querySelectorAll('.swatch[data-color]').forEach((b) => {
+    b.classList.toggle('is-active', b.dataset.color.toLowerCase() === color.toLowerCase());
+  });
+  $('colorPick').value = color;
+}
+
+$('btnLook').addEventListener('click', () => openModal('lookModal'));
+
+$('themeGrid').addEventListener('click', (e) => {
+  const b = e.target.closest('.theme');
+  if (!b) return;
+  const next = b.dataset.theme;
+  const patch = { theme: next };
+  // "Trong suốt" is pointless at full opacity — drop it so the choice is visible.
+  if (next === 'clear' && Number(state.settings.bgAlpha) >= 0.95) patch.bgAlpha = 0.35;
+  api.patchSettings(patch);
+});
+
+$('alphaRange').addEventListener('input', (e) => {
+  const v = Number(e.target.value) / 100;
+  $('alphaVal').textContent = `${e.target.value}%`;
+  $('widget').style.setProperty('--bg-alpha', String(v));
+});
+$('alphaRange').addEventListener('change', (e) => {
+  api.patchSettings({ bgAlpha: Number(e.target.value) / 100 });
+});
+
+$('colorGrid').addEventListener('click', (e) => {
+  const b = e.target.closest('.swatch[data-color]');
+  if (!b) return;
+  api.patchSettings({ textColor: b.dataset.color });
+});
+$('colorPick').addEventListener('change', (e) => {
+  api.patchSettings({ textColor: e.target.value });
+});
+
+$('btnResetSize').addEventListener('click', () => {
+  api.window('reset-size');
+  toast('Đã đưa về kích thước mặc định');
+});
+
+// ------------------------------------------------------------------ auto-hide title bar
+/**
+ * The bar is invisible until the pointer reaches the top edge. The sensor is a
+ * separate non-drag strip because a drag region swallows mouse events.
+ */
+let tbHideTimer = null;
+const tb = $('titlebar');
+const tbZone = $('tbZone');
+
+function showTitlebar() {
+  clearTimeout(tbHideTimer);
+  tb.classList.add('is-shown');
+}
+function hideTitlebarSoon() {
+  clearTimeout(tbHideTimer);
+  tbHideTimer = setTimeout(() => tb.classList.remove('is-shown'), 220);
+}
+
+tbZone.addEventListener('mouseenter', showTitlebar);
+tbZone.addEventListener('mousemove', showTitlebar);
+tb.addEventListener('mouseenter', showTitlebar);
+tb.addEventListener('mouseleave', hideTitlebarSoon);
+// Keep it open while a button inside has keyboard focus.
+tb.addEventListener('focusin', showTitlebar);
+tb.addEventListener('focusout', hideTitlebarSoon);
+
+// ------------------------------------------------------------------ resize grips
+/**
+ * The window is transparent and frameless, so Windows draws no resize border.
+ * These strips hand the drag to the main process, which follows the cursor.
+ */
+document.querySelectorAll('.grip').forEach((g) => {
+  g.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    api.resizeStart(g.dataset.edge);
+    const stop = () => {
+      api.resizeEnd();
+      window.removeEventListener('mouseup', stop);
+      window.removeEventListener('blur', stop);
+    };
+    window.addEventListener('mouseup', stop);
+    window.addEventListener('blur', stop);
+  });
+});
 
 // ------------------------------------------------------------------ tabs
 document.querySelectorAll('.tab').forEach((btn) => {

@@ -23,6 +23,9 @@ function emptyState() {
       theme: 'solid',
       textColor: '#e8eefc',
       bgAlpha: 1,
+      // Halo strength (0-100) for the "bare" style, where there is no surface
+      // behind the text and it has to stay legible on any wallpaper.
+      halo: 70,
       expandedHeight: 660,
     },
   };

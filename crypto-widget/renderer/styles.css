@@ -13,6 +13,15 @@
   --radius: 14px;
   --bg-alpha: 1;
   --tb-h: 26px;
+  /* "Chỉ chữ" halo. Defaults matter: the calc() below is invalid without a
+     number here, and an invalid text-shadow silently drops the whole halo. */
+  --halo: 0.7;
+  --halo-color: rgba(0, 0, 0, .92);
+  /* Per-colour halos: a mid-tone green needs a dark outline, not the body
+     text's outline, or it washes out on a bright wallpaper. */
+  --halo-up: rgba(0, 0, 0, .92);
+  --halo-down: rgba(0, 0, 0, .92);
+  --halo-accent: rgba(0, 0, 0, .92);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -145,7 +154,12 @@ input { user-select: text; cursor: text; }
   z-index: 30;
   -webkit-app-region: no-drag;
 }
-.titlebar:focus-within { opacity: 1; pointer-events: auto; }
+/*
+ * NOTE: there used to be a `.titlebar:focus-within { opacity: 1 }` rule here.
+ * It was a real bug: clicking any button left it focused, so the bar stayed
+ * visible for good and never auto-hid again. Keyboard focus is handled in
+ * app.js instead, and buttons are blurred after a click.
+ */
 
 /* the drag surface: fills the bar, sits under the buttons */
 .tb-drag {
@@ -381,6 +395,11 @@ input { user-select: text; cursor: text; }
 .sheet-head h2 { font-size: 15px; font-weight: 700; }
 
 .field { display: block; margin-bottom: 12px; }
+/*
+ * `display: block` above beats the `hidden` attribute, which is how a hidden
+ * field would still show. This rule must stay after the one above.
+ */
+.field[hidden] { display: none; }
 .field > span { display: block; color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; }
 .field > span b { color: var(--text); font-weight: 650; text-transform: none; letter-spacing: 0; }
 .field input {
@@ -411,7 +430,7 @@ input { user-select: text; cursor: text; }
 .sheet-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
 /* ================================================================ appearance controls */
-.themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.themes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .theme {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   padding: 8px 4px 7px; border-radius: 10px; cursor: pointer;
@@ -496,3 +515,226 @@ input[type="range"]::-webkit-slider-thumb {
 .widget.is-collapsed .body { display: none; }
 .widget.is-collapsed .collapsed-view { display: flex; }
 .widget.is-collapsed .titlebar { border-bottom: 0; }
+
+/* ================================================================ theme: bare (text only) */
+/**
+ * "Chỉ chữ" — the widget paints NO surface at all: no background, no border,
+ * no radius, no shadow. Every pixel that is not text is fully transparent, so
+ * the desktop shows straight through.
+ */
+.widget[data-theme="bare"] {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  /*
+   * Legibility on an arbitrary wallpaper.
+   *
+   * The first attempt was a stack of text-shadows. It failed for a measurable
+   * reason: a shadow is drawn OUTSIDE the glyph, so on a busy background the
+   * gaps between letters still show the wallpaper, and stacking eight of them
+   * to close those gaps blurs the letterform into a blob at 10-12px.
+   *
+   * `-webkit-text-stroke` with `paint-order: stroke fill` is the right tool:
+   * the stroke is painted BEHIND the fill, so the glyph keeps its exact shape
+   * and gains a solid outline of any width. Verified supported in this
+   * Electron build (CSS.supports + computed style) before relying on it.
+   *
+   * The blur shadow stays, but only as a soft glow around the outline — it is
+   * no longer what makes the text readable.
+   */
+  -webkit-text-stroke-width: calc(0.6px + 2.2px * var(--halo));
+  -webkit-text-stroke-color: var(--halo-color);
+  paint-order: stroke fill;
+  text-shadow: 0 0 calc(3px + 7px * var(--halo)) var(--halo-color);
+}
+
+/* every inner surface loses its fill so only glyphs remain */
+.widget[data-theme="bare"] .hero,
+.widget[data-theme="bare"] .tabs,
+.widget[data-theme="bare"] .foot,
+.widget[data-theme="bare"] .panel,
+.widget[data-theme="bare"] .collapsed-view,
+.widget[data-theme="bare"] .panel-head { background: none; border-color: transparent; }
+
+.widget[data-theme="bare"] .pos,
+.widget[data-theme="bare"] .trade,
+.widget[data-theme="bare"] .alert {
+  background: none;
+  border-color: transparent;
+}
+/* hover still needs a hint, but only while the pointer is on the row */
+.widget[data-theme="bare"] .pos:hover,
+.widget[data-theme="bare"] .trade:hover,
+.widget[data-theme="bare"] .alert:hover { background: rgba(127, 140, 165, .16); }
+
+/* thin rules and bars stay, at low contrast, so structure is still readable */
+.widget[data-theme="bare"] .alloc,
+.widget[data-theme="bare"] .pos-bar { background: rgba(127, 140, 165, .28); }
+.widget[data-theme="bare"] .tabs { border-bottom-color: rgba(127, 140, 165, .22); }
+.widget[data-theme="bare"] .foot { border-top-color: rgba(127, 140, 165, .22); }
+
+/* the active tab is marked with an underline instead of a filled pill */
+.widget[data-theme="bare"] .tab.is-active {
+  background: none;
+  color: var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.widget[data-theme="bare"] .tab:hover { background: rgba(127, 140, 165, .16); }
+
+/* pills lose their fill; the colour alone carries up/down */
+.widget[data-theme="bare"] .pill {
+  background: none;
+  padding: 0;
+  color: var(--up);
+  font-weight: 700;
+}
+.widget[data-theme="bare"] .pill.is-down { background: none; color: var(--down); }
+.widget[data-theme="bare"] .pill-ghost { background: none; color: var(--muted); }
+
+/*
+ * Rows are separated by whitespace, not by rules: a divider line would be a
+ * border, and this style promises none. Extra gap does the same job.
+ */
+.widget[data-theme="bare"] .pos { margin-bottom: 12px; padding: 4px 2px; }
+.widget[data-theme="bare"] .trade { margin-bottom: 10px; padding: 4px 2px; }
+.widget[data-theme="bare"] .alert { margin-bottom: 10px; padding: 4px 2px; }
+
+/**
+ * Small text is the hard case: at 10.5px a 1.5px outline eats most of the
+ * glyph, so the letters turn into blobs. The fix is to give the small text
+ * more size and weight (so there is more glyph to protect) and a slightly
+ * tighter outline, rather than a fatter one.
+ */
+.widget[data-theme="bare"] .pos-qty,
+.widget[data-theme="bare"] .pos-sub,
+.widget[data-theme="bare"] .trade-meta,
+.widget[data-theme="bare"] .alert-meta,
+.widget[data-theme="bare"] .hero-label,
+.widget[data-theme="bare"] .hero-status,
+.widget[data-theme="bare"] .cv-label,
+.widget[data-theme="bare"] .cv-pct,
+.widget[data-theme="bare"] .muted,
+.widget[data-theme="bare"] .hint,
+.widget[data-theme="bare"] .linkbtn,
+.widget[data-theme="bare"] .tab,
+.widget[data-theme="bare"] .panel-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .1px;
+}
+.widget[data-theme="bare"] .tab { font-size: 12.5px; }
+.widget[data-theme="bare"] .panel-title { font-size: 11.5px; }
+
+/*
+ * The muted tone is derived for a dark card. With no card behind it, it is too
+ * dim to survive a bright wallpaper, so it is lifted toward the text colour.
+ * Mixed with the halo colour (not with `transparent`) so the result stays
+ * fully opaque — a translucent label would let the wallpaper through it.
+ */
+.widget[data-theme="bare"] { --muted: color-mix(in srgb, var(--text) 80%, var(--halo-color)); }
+
+/*
+ * Semantic colours get their OWN halo. A single global halo is wrong for them:
+ * with dark body text the halo is white, and white behind mid-tone green is
+ * only ~2.2:1 — the P&L numbers wash out on a bright wallpaper. Measured, not
+ * guessed: green #16c784 is 2.2:1 on white and 7.9:1 on black.
+ */
+.widget[data-theme="bare"] .up,
+.widget[data-theme="bare"] .pill,
+.widget[data-theme="bare"] .cv-pnl.up {
+  -webkit-text-stroke-color: var(--halo-up);
+  text-shadow: 0 0 calc(3px + 7px * var(--halo)) var(--halo-up);
+}
+.widget[data-theme="bare"] .down,
+.widget[data-theme="bare"] .pill.is-down,
+.widget[data-theme="bare"] .cv-pnl.down {
+  -webkit-text-stroke-color: var(--halo-down);
+  text-shadow: 0 0 calc(3px + 7px * var(--halo)) var(--halo-down);
+}
+.widget[data-theme="bare"] .tab.is-active {
+  -webkit-text-stroke-color: var(--halo-accent);
+  text-shadow: 0 0 calc(3px + 7px * var(--halo)) var(--halo-accent);
+}
+/*
+ * `.pill-ghost` is the neutral percentage chip. It inherits `.pill`'s green
+ * halo, but its own text is the muted grey — and a dark halo behind dark grey
+ * is only 2.6:1. It must use the body-text halo, which is always the opposite
+ * tone. This rule has to come AFTER the `.pill` rule above to win.
+ */
+.widget[data-theme="bare"] .pill-ghost {
+  -webkit-text-stroke-color: var(--halo-color);
+  text-shadow: 0 0 calc(3px + 7px * var(--halo)) var(--halo-color);
+}
+/*
+ * NOTE: `.pos-sym` must NOT be in the rule above. The coin symbol is drawn in
+ * a per-coin accent colour, and the accent halo is chosen for #4f8cff — but a
+ * light accent (e.g. the yellow used for some coins) then gets a light halo
+ * and disappears. It keeps the body-text halo, which is chosen from the body
+ * text colour and is therefore always the opposite tone.
+ */
+
+/*
+ * The auto-hiding bar in "Chỉ chữ" mode.
+ *
+ * It must NOT be a full-width pill: the hero label ("TỔNG GIÁ TRỊ DANH MỤC")
+ * sits at the top-left, and a full-width bar covered it — caught in a visual
+ * check. So the bar itself stays transparent (it is still the drag handle and
+ * still spans the width), and only the three buttons get their own small dark
+ * discs. Nothing is drawn where there is no button.
+ */
+.widget[data-theme="bare"] .titlebar {
+  background: none;
+  border-bottom: 0;
+  border-radius: 0;
+  padding: 0 6px;
+}
+.widget[data-theme="bare"] .wbtn {
+  background: rgba(12, 16, 24, .78);
+  border-radius: 50%;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* dialogs are transient and must stay usable, so they keep a real surface */
+.widget[data-theme="bare"] .modal { background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.widget[data-theme="bare"] .sheet {
+  background: rgba(14, 20, 31, .97);
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 16px;
+  margin: 8px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .55);
+}
+/* the halo belongs to the desktop-facing text, not to text on a real surface */
+.widget[data-theme="bare"] .sheet,
+.widget[data-theme="bare"] .sheet * { text-shadow: none; }
+
+/* the swatch for this style: a checkerboard with a lone "Aa" */
+.sw-bare {
+  background:
+    repeating-conic-gradient(#2a3446 0% 25%, #1a2230 0% 50%) 50% / 10px 10px;
+  display: grid; place-items: center;
+  color: #fff; font-size: 12px; font-weight: 700;
+  text-shadow: 0 0 2px #000, 0 0 4px #000;
+}
+
+/*
+ * With no border there is nothing to show where the window ends, so the resize
+ * strips reveal themselves only while the pointer is on them. Nothing is drawn
+ * at rest, which keeps the "no frame" promise.
+ */
+.widget[data-theme="bare"] .grip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity .15s ease;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.widget[data-theme="bare"] .grip:hover::after { opacity: .55; }
+/* the corner grips are square, so their indicator is a small dot, not a bar */
+.widget[data-theme="bare"] .grip-ne::after,
+.widget[data-theme="bare"] .grip-nw::after,
+.widget[data-theme="bare"] .grip-se::after,
+.widget[data-theme="bare"] .grip-sw::after { inset: 3px; border-radius: 50%; }

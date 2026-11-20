@@ -267,9 +267,26 @@ const THEME_HINT = {
   midnight: 'Đen tuyệt đối, hợp màn hình OLED.',
   glass: 'Kính mờ — nền bán trong suốt, tông xanh.',
   clear: 'Trong suốt — nhìn xuyên qua thấy desktop.',
+  bare: 'Chỉ chữ — không nền, không viền, không bóng. Nhìn thẳng ra desktop.',
   aurora: 'Dải màu chuyển sắc xanh–tím.',
   light: 'Nền sáng cho môi trường nhiều ánh sáng.',
 };
+
+/**
+ * Relative luminance of a #rrggbb colour (WCAG formula).
+ * Used to pick the halo colour: light text needs a dark halo and vice versa,
+ * which is what keeps the numbers readable on a white wallpaper and on a black
+ * one with the same text colour.
+ */
+function luminance(hex) {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(hex));
+  if (!m) return 0.5;
+  const ch = [m[1], m[2], m[3]].map((h) => {
+    const c = parseInt(h, 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
 
 function applyLook(s) {
   const theme = THEME_HINT[s.theme] ? s.theme : 'solid';
@@ -284,6 +301,40 @@ function applyLook(s) {
   const color = /^#[0-9a-f]{6}$/i.test(String(s.textColor || '')) ? s.textColor : '#e8eefc';
   w.style.setProperty('--text', color);
 
+  // ---- "Chỉ chữ": the halo is the only thing standing between the text and
+  // an arbitrary wallpaper, so it is derived from the text colour itself.
+  const halo = Number.isFinite(Number(s.halo)) ? Math.min(100, Math.max(0, Number(s.halo))) : 70;
+  w.style.setProperty('--halo', String(halo / 100));
+
+  /**
+   * Pick the halo colour for a given text colour.
+   *
+   * This has to be per-colour, not global. The P&L numbers are green/red, and
+   * a single global halo gets them wrong: with dark body text the halo is
+   * white, and white behind mid-tone green is only ~2.2:1 — the numbers wash
+   * out. Each colour therefore gets the halo that maximises its own contrast.
+   *
+   * The choice is made by actually computing both WCAG ratios and taking the
+   * larger one. An earlier version used a luminance threshold ("above 0.35 ->
+   * dark halo"), which is wrong for mid-tones: the accent blue #4f8cff has
+   * luminance 0.28, so it got a WHITE halo and only 3.2:1, when a dark halo
+   * gives it 6.5:1. Measuring beats guessing.
+   */
+  const contrastWith = (hex, halo) => {
+    const a = luminance(hex);
+    const b = halo === 'dark' ? 0 : 1;
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  };
+  const haloFor = (hex) => (contrastWith(hex, 'dark') >= contrastWith(hex, 'light')
+    ? 'rgba(0, 0, 0, .92)'
+    : 'rgba(255, 255, 255, .92)');
+
+  w.style.setProperty('--halo-color', haloFor(color));
+  // The semantic colours are fixed, so their halos are too.
+  w.style.setProperty('--halo-up', haloFor('#16c784'));
+  w.style.setProperty('--halo-down', haloFor('#ea3943'));
+  w.style.setProperty('--halo-accent', haloFor('#4f8cff'));
+
   // Reflect the current values in the controls.
   document.querySelectorAll('.theme').forEach((b) => {
     b.classList.toggle('is-active', b.dataset.theme === theme);
@@ -293,6 +344,11 @@ function applyLook(s) {
   const pct = Math.round(alpha * 100);
   $('alphaRange').value = String(pct);
   $('alphaVal').textContent = `${pct}%`;
+  // Opacity is meaningless when there is no surface to make opaque.
+  $('alphaField').hidden = theme === 'bare';
+  $('haloField').hidden = theme !== 'bare';
+  $('haloRange').value = String(halo);
+  $('haloVal').textContent = `${halo}%`;
 
   document.querySelectorAll('.swatch[data-color]').forEach((b) => {
     b.classList.toggle('is-active', b.dataset.color.toLowerCase() === color.toLowerCase());
@@ -319,6 +375,15 @@ $('alphaRange').addEventListener('input', (e) => {
 });
 $('alphaRange').addEventListener('change', (e) => {
   api.patchSettings({ bgAlpha: Number(e.target.value) / 100 });
+});
+
+$('haloRange').addEventListener('input', (e) => {
+  const v = Number(e.target.value);
+  $('haloVal').textContent = `${v}%`;
+  $('widget').style.setProperty('--halo', String(v / 100));
+});
+$('haloRange').addEventListener('change', (e) => {
+  api.patchSettings({ halo: Number(e.target.value) });
 });
 
 $('colorGrid').addEventListener('click', (e) => {
@@ -357,9 +422,20 @@ tbZone.addEventListener('mouseenter', showTitlebar);
 tbZone.addEventListener('mousemove', showTitlebar);
 tb.addEventListener('mouseenter', showTitlebar);
 tb.addEventListener('mouseleave', hideTitlebarSoon);
-// Keep it open while a button inside has keyboard focus.
-tb.addEventListener('focusin', showTitlebar);
+
+/**
+ * Keyboard focus keeps the bar open, but only for real keyboard focus.
+ * A mouse click also focuses a button, and that used to pin the bar open for
+ * good (the old CSS `:focus-within` rule). So: buttons are blurred right after
+ * a click, and `:focus-visible` decides whether focus counts.
+ */
+tb.addEventListener('focusin', (e) => {
+  if (e.target.matches(':focus-visible')) showTitlebar();
+});
 tb.addEventListener('focusout', hideTitlebarSoon);
+tb.querySelectorAll('.wbtn').forEach((b) => {
+  b.addEventListener('click', () => b.blur());
+});
 
 // ------------------------------------------------------------------ resize grips
 /**

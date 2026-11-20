@@ -402,6 +402,9 @@ function registerIpc() {
     if (typeof p.bgAlpha === 'number' && Number.isFinite(p.bgAlpha)) {
       allowed.bgAlpha = Math.min(1, Math.max(0, p.bgAlpha));
     }
+    if (typeof p.halo === 'number' && Number.isFinite(p.halo)) {
+      allowed.halo = Math.min(100, Math.max(0, Math.round(p.halo)));
+    }
     store.patchSettings(allowed);
     pushState();
     return { ok: true, settings: store.settings };

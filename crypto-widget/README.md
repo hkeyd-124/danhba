@@ -12,7 +12,8 @@ Giá lấy trực tiếp từ **Binance USDⓈ-M Futures**. Toàn bộ dữ li�
 | | |
 |---|---|
 | **Widget thật** | Cửa sổ không viền, luôn nổi trên các cửa sổ khác, kéo thả bằng thanh tiêu đề, thu gọn còn một dòng tổng giá trị, ẩn xuống khay hệ thống. |
-| **Ghim trên thanh taskbar** | Thu thành một dải mỏng sát thanh taskbar, chỉ hiện tổng giá trị. Bấm vào để bung ra đầy đủ, bấm ra ngoài để thu lại. Xem mục dưới. |
+| **Ba chế độ vị trí** | Cửa sổ nổi, dải sát taskbar, và **dải nằm trong thanh taskbar** (cùng hàng với các icon). Bấm vào để bung ra, bấm ra ngoài để thu lại. Xem mục dưới. |
+| **Biểu đồ giá trị** | Đường giá trị danh mục theo thời gian (5 phút / 15 phút / 1 giờ), lấy mẫu mỗi 5 giây, lưu trên máy. Không trục, không lưới — chỉ hình dáng và mức thay đổi. |
 | **Giá thời gian thực** | WebSocket `markPrice@1s` của Binance Futures, có REST fallback khi socket rớt. Tự kết nối lại với backoff. |
 | **Nhập tay** | Thêm / sửa / xoá lệnh mua–bán: đồng coin, giá vào, số lượng, phí, thời điểm, ghi chú. |
 | **Tính toán** | Giá vốn bình quân gia quyền (phí mua gộp vào giá vốn, phí bán trừ vào lãi thực hiện), P&L thực hiện + chưa thực hiện, % phân bổ danh mục. |
@@ -70,7 +71,7 @@ npm run dist:portable
 > set HTTPS_PROXY=http://proxy:port
 > ```
 
-> **Nếu bước nén báo lỗi `ERR_ELECTRON_BUILDER_CANNOT_EXECUTE`:** máy build không đủ RAM cho mức nén mặc định (`-mx=9` cần ~1 GB trở lên). Thêm vào `package.json`:
+> **Nếu bước nén báo lỗi `ERR_ELECTRON_BUILDER_CANNOT_EXECUTE`:** máy build không đủ RAM cho mức nén mặc định (`-mx=9` cần ~1 GB trở lên). `package.json` đã đặt sẵn `"compression": "store"` để tránh việc này; nếu bạn đã xoá, thêm lại:
 > ```json
 > "compression": "store"
 > ```
@@ -91,28 +92,50 @@ Bản build không ký sẽ bị SmartScreen cảnh báo lần đầu chạy. Đ
 4. Tab **Cảnh báo** → `+ Thêm` → chọn "vượt lên trên" hoặc "giảm xuống dưới", nhập ngưỡng.
 5. Nút **📌** bật/tắt luôn nổi. Nút **▾** thu gọn. Nút **✕** ẩn xuống khay — bấm icon khay để mở lại.
 
-### Chế độ ghim trên thanh taskbar
+### Ba chế độ vị trí
 
-Widget có thể sống như một **dải mỏng nằm sát thanh taskbar**, thay vì một cửa sổ nổi.
+Bấm **⚙** → mục **Vị trí**, hoặc chuột phải icon khay → *Vị trí*.
 
-**Bật:** bấm **⚙** → mục **Vị trí** → chọn **Trên taskbar**. (Hoặc chuột phải icon khay → *Ghim trên thanh taskbar*.)
+| Chế độ | Trông thế nào |
+|---|---|
+| **Cửa sổ nổi** | Panel tự do, kéo thả và đổi kích thước tuỳ ý. |
+| **Sát taskbar** | Dải mỏng nằm **ngay trên** thanh taskbar, trong vùng làm việc nên không che các nút của taskbar. |
+| **Trong taskbar** | Dải nằm **đúng trong hình chữ nhật của thanh taskbar**, cùng hàng với các icon app. |
 
-**Cách hoạt động:**
+**Cách hoạt động (cả hai chế độ ghim):**
 
 | Trạng thái | Trông thế nào |
 |---|---|
-| Bình thường | Dải cao 44px, rộng 300px, chỉ hiện **tổng giá trị** + P&L. Không tab, không nhãn thừa. |
+| Bình thường | Dải cao ~40px, chỉ hiện **tổng giá trị** + P&L. Không tab, không nhãn thừa. |
 | Bấm vào dải | Bung ra đầy đủ giao diện (danh mục, lệnh, cảnh báo) — mở **lên trên** khỏi taskbar. |
 | Bấm ra ngoài | Tự thu lại về dải. |
 | Bấm ▾ | Thu lại ngay. |
 
-Dải nằm **trong vùng làm việc**, sát mép trong của taskbar, nên **không che** các nút trên taskbar. Vị trí ngang và kích thước panel được nhớ; bật/tắt chế độ này cũng được nhớ sau khi tắt mở app.
+Vị trí ngang, kích thước panel, và chế độ đang chọn đều được nhớ sau khi tắt mở app.
 
-**Tự thu lại khi bấm ra ngoài** — bật/tắt được ở **⚙ → Vị trí**. Mặc định **Bật**. Tắt nếu bạn muốn panel mở mãi cho đến khi tự thu gọn.
+**Tự thu lại khi bấm ra ngoài** — bật/tắt được ở **⚙ → Vị trí**. Mặc định **Bật**.
 
 > Chế độ này **chỉ áp dụng khi đã ghim**. Ở chế độ cửa sổ nổi, widget không tự thu lại khi bạn bấm sang cửa sổ khác — nếu không nó sẽ biến mất giữa lúc bạn đang xem.
 
 > Đang mở form thêm lệnh hay hộp thoại xác nhận thì widget **không** thu lại, kể cả khi hộp thoại làm mất focus.
+
+#### Giới hạn của chế độ "Trong taskbar" — đọc mục này
+
+**Windows không cho nhúng cửa sổ của app khác vào thanh taskbar.** Taskbar là một cửa sổ do `explorer.exe` sở hữu, và không có API công khai nào để biến cửa sổ của process khác thành con của nó. Mọi cách làm đều là hack (đổi parent window, `SetWindowLong` trên handle của explorer) và sẽ vỡ ở bản Windows tiếp theo.
+
+Vì vậy chế độ này là **một lớp phủ đặt chính xác lên hình chữ nhật của thanh taskbar**, cao bằng taskbar, và được nâng lên trên taskbar trong thứ tự z. Nó **trông và hoạt động như** một phần của taskbar, nhưng **không phải** là một phần của taskbar. Các hệ quả cụ thể:
+
+| Điều | Thực tế |
+|---|---|
+| Vị trí | Đúng trong hình chữ nhật taskbar, cùng hàng với icon. |
+| Khi taskbar tự ẩn | Dải vẫn nằm ở mép dưới màn hình và **vẫn hiện** khi taskbar trượt đi — nó không trượt theo. |
+| Khi bấm "Hiện desktop" | Dải **không** bị ẩn theo như các cửa sổ khác. |
+| Khi taskbar đổi kích thước | Dải **không** tự bám theo cho đến lần mở app sau (hoặc khi đổi chế độ vị trí). |
+| Taskbar dọc (cạnh trái/phải) | **Không dùng được** — taskbar dọc chỉ rộng ~48px, không đủ chỗ cho dải ngang. App tự lùi về chế độ *Sát taskbar*. |
+| Nhiều màn hình | Dải luôn ở màn hình chính. |
+| Kéo dải | Kéo ngang được; kéo dọc bị chặn để dải không bị lôi ra khỏi taskbar. |
+
+Nếu bạn cần nó **thật sự** là một phần của taskbar, chỉ có một cách đúng: viết một **deskband / toolbar** bằng C++ (COM `IDeskBand`) và đăng ký với shell — đó là một sản phẩm khác, không phải Electron, và Microsoft đã không còn hỗ trợ chính thức từ Windows 11.
 
 ### Tuỳ chỉnh giao diện
 
@@ -136,7 +159,26 @@ Bấm nút **⚙** ở chân widget (cạnh "Dữ liệu trên máy") để mở
 
 **Kích thước** — kéo 8 cạnh/góc cửa sổ để đổi kích thước, hoặc bấm **Về mặc định** (420×660).
 
+**Biểu đồ** — bật/tắt, và chọn khung thời gian **5 phút / 15 phút / 1 giờ**. Xem mục dưới.
+
 > Mọi tuỳ chỉnh được ghi ngay vào `portfolio.json` và **giữ nguyên sau khi tắt mở app**.
+
+### Biểu đồ giá trị danh mục
+
+Một đường mảnh ngay dưới tổng giá trị, cho biết danh mục đã đi lên hay đi xuống trong khung thời gian đang chọn.
+
+**Cố tình tối giản:** không trục, không lưới, không chú giải, không tooltip. Con số ở trên đã nói giá trị là bao nhiêu, nên biểu đồ chỉ cần nói **hình dáng** của chuyển động. Dòng chú thích nhỏ bên dưới ghi khung thời gian và mức thay đổi — thứ mà một sparkline trần không thể cho biết.
+
+| Chi tiết | |
+|---|---|
+| Dữ liệu | Giá trị danh mục, lấy mẫu mỗi **5 giây**, tối đa **720 mẫu** (~1 giờ) |
+| Lưu ở đâu | Khoá `history` trong `portfolio.json` — **chỉ trên máy** |
+| Màu | Xanh khi tăng, đỏ khi giảm, xám khi đứng yên — cùng ngôn ngữ với P&L |
+| Khi thêm/xoá lệnh | Ghi mẫu ngay lập tức, để biểu đồ hiện **bước nhảy** thay vì nội suy qua nó |
+| Chế độ "Chỉ chữ" | Đường có quầng riêng để không chìm vào hình nền |
+| Chế độ ghim | **Không vẽ** — dải chỉ cao ~40px, một đường ngoằn ngoèo sau con số chỉ là nhiễu |
+
+> Biểu đồ bắt đầu **trống** ở lần chạy đầu tiên và đầy dần trong vài phút. Đây là dữ liệu quan sát được từ lúc bạn mở app, không phải dữ liệu lịch sử tải về từ Binance — app không tải gì về ngoài giá hiện tại.
 
 ### Chế độ "Chỉ chữ" — không nền, không khung
 
@@ -171,11 +213,11 @@ Vẫn kéo thả widget được: giữ chuột ở mép trên và kéo — vùn
 |---|---|
 | Kéo mép trên | Di chuyển widget |
 | Kéo cạnh / góc | Đổi kích thước widget |
-| Bấm vào dải (khi ghim taskbar) | Bung ra đầy đủ |
-| Bấm ra ngoài (khi ghim taskbar) | Thu lại về dải |
+| Bấm vào dải (khi ghim) | Bung ra đầy đủ |
+| Bấm ra ngoài (khi ghim) | Thu lại về dải |
 | `Esc` | Đóng hộp thoại đang mở |
 | Click icon khay | Hiện / ẩn widget |
-| Chuột phải icon khay | Menu: Hiện/Ẩn, Ghim trên thanh taskbar, Luôn nổi, Thoát |
+| Chuột phải icon khay | Menu: Hiện/Ẩn, Vị trí (3 chế độ), Luôn nổi, Thoát |
 
 ---
 
@@ -192,7 +234,8 @@ Bấm **"Dữ liệu trên máy"** ở chân widget để mở thư mục chứa
 - Ghi kiểu **atomic** (ghi file tạm rồi rename) nên mất điện giữa chừng không làm hỏng dữ liệu.
 - Nếu file bị hỏng, bản cũ được giữ lại thành `portfolio.json.corrupt-<timestamp>` thay vì bị xoá.
 - Sao lưu = copy file đó. Khôi phục = chép đè lại.
-- Tuỳ chỉnh giao diện nằm trong `settings` của cùng file đó: `theme`, `textColor`, `bgAlpha`, `halo`, `bounds`, `expandedHeight`, và cho chế độ ghim taskbar: `dockToTaskbar`, `dockX`, `dockWidth`, `collapseOnBlur`. Xoá các khoá này là về mặc định.
+- Tuỳ chỉnh giao diện nằm trong `settings` của cùng file đó: `theme`, `textColor`, `bgAlpha`, `halo`, `bounds`, `expandedHeight`, `chart`, `chartRange`, và cho chế độ ghim: `dockMode` (`float` / `edge` / `taskbar`), `dockX`, `dockWidth`, `collapseOnBlur`. Xoá các khoá này là về mặc định.
+- **Lịch sử biểu đồ** nằm ở khoá `history` của cùng file: mảng `{t, v}` (thời điểm, giá trị danh mục), tối đa 720 mẫu, lấy mẫu mỗi 5 giây. Đây là dữ liệu **chỉ trên máy**, không gửi đi đâu. Xoá khoá này là biểu đồ bắt đầu lại từ trống.
 
 ---
 
@@ -214,15 +257,16 @@ Muốn tự kiểm chứng: bật Wireshark/Resource Monitor và xem tiến trì
 ## Kiểm thử
 
 ```bat
-npm test          :: 22 unit test (toán danh mục + feed + cảnh báo)
+npm test          :: 40 unit test (toán danh mục + feed + cảnh báo + hình học biểu đồ)
 ```
 
 Test e2e chạy Electron thật (cần Linux + Xvfb, dùng trong CI):
 
 ```bash
-npm run test:e2e  # 107 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh báo, thu gọn, reload,
+npm run test:e2e  # 137 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh báo, thu gọn, reload,
                   # theme nền, màu chữ, độ đục, thanh tiêu đề tự ẩn, tay nắm resize,
-                  # chế độ ghim taskbar (dải, bấm mở, bấm ra ngoài thu lại)
+                  # 3 chế độ vị trí (kể cả dải nằm TRONG hình chữ nhật taskbar),
+                  # biểu đồ (đường, vùng tô, chấm cuối, chú thích, khung thời gian, lưu sau reload)
 ```
 
 ### Kiểm chứng nền trong suốt thật
@@ -253,31 +297,36 @@ Sự khác biệt này chính là bằng chứng: depth đổi theo compositor n
 
 ```
 crypto-widget/
-├── main.js              # main process: cửa sổ, tray, IPC, thông báo
+├── main.js              # main process: cửa sổ, tray, IPC, thông báo, đặt vị trí
 ├── preload.js           # cầu nối hẹp giữa main và renderer
 ├── src/
 │   ├── portfolio.js     # toán danh mục (thuần, không I/O)
 │   ├── feed.js          # Binance Futures WS + REST fallback
 │   ├── alerts.js        # engine cảnh báo (edge-triggered)
-│   └── store.js         # lưu JSON atomic
+│   └── store.js         # lưu JSON atomic + lịch sử biểu đồ
 ├── renderer/
 │   ├── index.html
 │   ├── styles.css         # 7 theme nền (gồm "Chỉ chữ"), thanh tiêu đề tự ẩn, tay nắm resize
-│   ├── dock.css           # bố cục dải ghim taskbar (nạp sau styles.css)
+│   ├── dock.css           # bố cục dải ghim (sát taskbar + trong taskbar)
+│   ├── chart.css          # biểu đồ giá trị
+│   ├── chart.js           # hình học biểu đồ (thuần, không DOM — unit test trực tiếp)
 │   └── app.js             # render + bảng tuỳ chỉnh giao diện
 ├── build/               # icon
 └── test/                # unit + e2e + screenshot + transparency harness
 ```
 
-### Kiểm thử chế độ ghim taskbar
+### Kiểm thử chế độ vị trí và biểu đồ
 
 ```bash
-xvfb-run -a node test/e2e.js        # 107 assertion, gồm 20 cho chế độ ghim
+xvfb-run -a node test/e2e.js        # 137 assertion, gồm 20 cho chế độ ghim + 20 cho biểu đồ
 xvfb-run -a node test/dock-shots.js # ảnh chụp dải ghim → shots-dock/
+xvfb-run -a node test/shots-v6.js   # ảnh chụp biểu đồ + 3 chế độ vị trí → shots-v6/
 xvfb-run -a node test/dock-measure.js # số đo hình học thật của dải
 ```
 
 Bộ e2e kiểm: dải chỉ hiện tổng (không tab, không hero), cửa sổ thật sự cao ≤60px, bấm dải thì bung ra, thu lại về dải, **tổng không bị cắt** (`scrollWidth ≤ clientWidth`), **nút thanh tiêu đề không đè lên tổng** (so bounding box), P&L nhường chỗ khi thanh tiêu đề mở, bấm ra ngoài thì thu lại, form đang mở thì **không** thu, tắt tuỳ chọn thì blur không làm gì, và chế độ ghim sống sót qua reload.
+
+Riêng chế độ **Trong taskbar**, các assertion đọc **hình học cửa sổ thật** từ main process (hook `test-geometry`), không đọc CSS: cửa sổ phải nằm **bên trong** hình chữ nhật taskbar, cao không quá taskbar, nằm trong biên ngang, được nâng trên taskbar, và khi bung ra thì panel **không** đè lên taskbar.
 
 > Sandbox không có window manager nên không thể tạo focus change thật. Vì vậy main process đăng ký hook `test-blur` **chỉ khi `CPW_TEST=1`**, bắn đúng handler mà OS sẽ bắn — để nhánh code thật được kiểm chứ không phải giả định.
 
@@ -288,6 +337,7 @@ Bộ e2e kiểm: dải chỉ hiện tổng (không tab, không hero), cửa sổ
 - **Vì sao `markPrice` chứ không phải `miniTicker`?** `markPrice` là giá dùng để tính P&L và thanh lý trên Futures — đúng thứ một người giữ vị thế futures quan tâm.
 - **Taskbar ở cạnh nào?** Không có API cho việc này, nhưng suy ra được: taskbar là dải mà *work area* loại trừ khỏi *bounds* của màn hình. Taskbar tự ẩn báo work area bằng cả màn hình, khi đó mặc định là `bottom`.
 - **Vì sao dải ghim bỏ nhãn "Tổng giá trị"?** Ở 44px và 300px, nhãn + P&L lấy hết chỗ và **cắt cụt con số** thành `58,60…` — đúng thứ quan trọng nhất lại không đọc được. Ảnh chụp bắt được lỗi này; giờ nhãn bị bỏ, con số không bao giờ bị ellipsis, và P&L bị giới hạn 46% bề rộng.
+- **Vì sao panel bung ra neo vào taskbar chứ không vào work area?** Khi taskbar tự ẩn, work area bằng cả màn hình, nên neo vào nó đặt đáy panel ở đáy màn hình — **đè lên taskbar**, đúng thứ chế độ này sinh ra để tránh. Test e2e bắt được (đáy panel 1024, đỉnh taskbar 976).
 - **Đường dẫn `/market`:** từ 2026 Binance định tuyến stream; `@markPrice` nằm trên `/market`, kết nối không có path sẽ **im lặng không nhận gì**. Code dùng `wss://fstream.binance.com/market/stream?streams=...`.
 - **Cảnh báo edge-triggered:** nếu giá đứng yên trên ngưỡng, bạn không bị spam thông báo. Phải quay lại phía bên kia rồi cắt qua lần nữa (và qua cooldown 5 phút).
 - **Bán quá số đang giữ:** bị chặn ở số lượng thực có, kèm cảnh báo vàng ở chân widget — không âm thầm tính sai.

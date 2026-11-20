@@ -121,6 +121,7 @@
           <button type="button" class="theme" data-theme="midnight"><i class="sw sw-midnight"></i><b>Đen</b></button>
           <button type="button" class="theme" data-theme="glass"><i class="sw sw-glass"></i><b>Kính mờ</b></button>
           <button type="button" class="theme" data-theme="clear"><i class="sw sw-clear"></i><b>Trong suốt</b></button>
+          <button type="button" class="theme" data-theme="bare"><i class="sw sw-bare">Aa</i><b>Chỉ chữ</b></button>
           <button type="button" class="theme" data-theme="aurora"><i class="sw sw-aurora"></i><b>Aurora</b></button>
           <button type="button" class="theme" data-theme="light"><i class="sw sw-light"></i><b>Sáng</b></button>
         </div>
@@ -131,6 +132,12 @@
         <span>Độ đục nền <b id="alphaVal">100%</b></span>
         <input type="range" id="alphaRange" min="0" max="100" step="5" />
         <em class="hint">Kéo xuống để nhìn xuyên qua desktop phía sau.</em>
+      </label>
+
+      <label class="field" id="haloField" hidden>
+        <span>Quầng chữ <b id="haloVal">70%</b></span>
+        <input type="range" id="haloRange" min="0" max="100" step="5" />
+        <em class="hint">Tăng nếu chữ bị chìm vào hình nền sáng hoặc rối.</em>
       </label>
 
       <div class="field">

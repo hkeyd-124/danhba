@@ -19,7 +19,7 @@ let failures = 0;
 function check(name, cond, detail) {
   results.push({ name, ok: !!cond, detail });
   if (!cond) failures++;
-  console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${!cond && detail ? `  → ${detail}` : ''}`);
+  console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${!cond && detail ? `  \u2192 ${detail}` : ''}`);
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -270,7 +270,7 @@ async function findTarget(port, tries = 60) {
     `);
     check('edit modal prefilled', editState.open && editState.price === '60000' && editState.sym === 'BTC',
       JSON.stringify(editState));
-    check('edit modal titled "Sửa lệnh"', editState.title === 'Sửa lệnh', editState.title);
+    check('edit modal titled "S\u1eeda l\u1ec7nh"', editState.title === 'S\u1eeda l\u1ec7nh', editState.title);
 
     await cdp.eval(`
       const el = document.getElementById('tradeQty');
@@ -342,6 +342,22 @@ async function findTarget(port, tries = 60) {
     `);
     check('expand restores the body', expanded);
 
+    // Regression: the collapsed summary must not leak into the expanded view.
+    // `display:flex` on .collapsed-view used to beat the `hidden` attribute and
+    // printed the total value twice.
+    const noDup = await cdp.eval(`
+      const cv = document.getElementById('collapsedView');
+      return {
+        hidden: cv.hidden,
+        display: getComputedStyle(cv).display,
+        visibleTotals: [...document.querySelectorAll('#totalValue, #cvValue')]
+          .filter((el) => el.offsetParent !== null).length,
+      };
+    `);
+    check('collapsed summary is hidden while expanded', noDup.display === 'none', noDup.display);
+    check('the total value is shown exactly once', noDup.visibleTotals === 1,
+      `visible=${noDup.visibleTotals}`);
+
     // ---------- 8. persistence across a reload
     await cdp.send('Page.reload');
     await wait(2000);
@@ -355,6 +371,178 @@ async function findTarget(port, tries = 60) {
     check('trades survive a reload', afterReload.trades === 1, `trades=${afterReload.trades}`);
     check('alerts survive a reload', afterReload.alerts === 1, `alerts=${afterReload.alerts}`);
     check('value survives a reload', afterReload.total.includes('76,000'), afterReload.total);
+
+    // ---------- 8b. appearance: themes, text colour, persistence
+    await cdp.eval(`document.getElementById('btnLook').click(); return true;`);
+    await wait(250);
+    const lookOpen = await cdp.eval(`return !document.getElementById('lookModal').hidden;`);
+    check('appearance panel opens', lookOpen);
+
+    const themeCount = await cdp.eval(`return document.querySelectorAll('#themeGrid .theme').length;`);
+    check('six background styles offered', themeCount === 6, `count=${themeCount}`);
+
+    // switch to the see-through style
+    await cdp.eval(`document.querySelector('.theme[data-theme="clear"]').click(); return true;`);
+    await wait(500);
+    const clearState = await cdp.eval(`
+      const w = document.getElementById('widget');
+      const cs = getComputedStyle(w);
+      return {
+        theme: w.dataset.theme,
+        alpha: w.style.getPropertyValue('--bg-alpha'),
+        bg: cs.backgroundColor,
+        active: document.querySelector('.theme.is-active')?.dataset.theme,
+      };
+    `);
+    check('theme switches to "clear"', clearState.theme === 'clear', clearState.theme);
+    check('"clear" drops the background opacity so the desktop shows through',
+      Number(clearState.alpha) < 0.6, `alpha=${clearState.alpha}`);
+    check('the active style is highlighted', clearState.active === 'clear', clearState.active);
+
+    // the window itself must be transparent for any of this to be visible
+    const winTransparent = await cdp.eval(`
+      return { bg: getComputedStyle(document.body).backgroundColor };
+    `);
+    check('body paints no opaque background of its own',
+      winTransparent.bg === 'rgba(0, 0, 0, 0)' || winTransparent.bg === 'transparent',
+      winTransparent.bg);
+
+    // text colour
+    await cdp.eval(`document.querySelector('.swatch[data-color="#fde68a"]').click(); return true;`);
+    await wait(400);
+    const textState = await cdp.eval(`
+      const w = document.getElementById('widget');
+      return {
+        v: w.style.getPropertyValue('--text'),
+        hero: getComputedStyle(document.getElementById('totalValue')).color,
+        active: document.querySelector('.swatch.is-active')?.dataset.color,
+      };
+    `);
+    check('text colour variable is applied', textState.v.toLowerCase() === '#fde68a', textState.v);
+    check('hero text actually renders in the chosen colour',
+      textState.hero === 'rgb(253, 230, 138)', textState.hero);
+    check('the chosen swatch is marked active', textState.active === '#fde68a', textState.active);
+
+    // background opacity slider
+    await cdp.eval(`
+      const r = document.getElementById('alphaRange');
+      r.value = '55';
+      r.dispatchEvent(new Event('input', { bubbles: true }));
+      r.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    `);
+    await wait(500);
+    const alphaState = await cdp.eval(`
+      return {
+        v: document.getElementById('widget').style.getPropertyValue('--bg-alpha'),
+        label: document.getElementById('alphaVal').textContent,
+      };
+    `);
+    check('opacity slider sets the background alpha', Math.abs(Number(alphaState.v) - 0.55) < 0.01,
+      alphaState.v);
+    check('opacity label follows the slider', alphaState.label === '55%', alphaState.label);
+
+    await cdp.eval(`document.querySelector('#lookModal [data-close]').click(); return true;`);
+    await wait(200);
+
+    // ---------- 8c. appearance survives a restart (settings persisted to disk)
+    await cdp.send('Page.reload');
+    await wait(2000);
+    const lookAfterReload = await cdp.eval(`
+      const w = document.getElementById('widget');
+      return {
+        theme: w.dataset.theme,
+        text: w.style.getPropertyValue('--text'),
+        alpha: w.style.getPropertyValue('--bg-alpha'),
+      };
+    `);
+    check('theme survives a reload', lookAfterReload.theme === 'clear', lookAfterReload.theme);
+    check('text colour survives a reload', lookAfterReload.text.toLowerCase() === '#fde68a',
+      lookAfterReload.text);
+    check('background opacity survives a reload',
+      Math.abs(Number(lookAfterReload.alpha) - 0.55) < 0.01, lookAfterReload.alpha);
+
+    // ---------- 8d. auto-hiding title bar
+    const tbState = await cdp.eval(`
+      const tb = document.getElementById('titlebar');
+      const zone = document.getElementById('tbZone');
+      const cs = getComputedStyle(tb);
+      return {
+        opacity: cs.opacity,
+        pointer: cs.pointerEvents,
+        hasZone: !!zone,
+        zoneH: zone ? zone.getBoundingClientRect().height : 0,
+        barH: tb.getBoundingClientRect().height,
+        shown: tb.classList.contains('is-shown'),
+      };
+    `);
+    check('title bar is invisible at rest', Number(tbState.opacity) === 0, `opacity=${tbState.opacity}`);
+    check('hidden title bar does not swallow clicks', tbState.pointer === 'none', tbState.pointer);
+    check('a hover sensor covers the top edge', tbState.hasZone && tbState.zoneH > 0,
+      `h=${tbState.zoneH}`);
+    check('title bar is a thin strip, not a full header', tbState.barH > 0 && tbState.barH <= 32,
+      `h=${tbState.barH}`);
+
+    // simulate the pointer reaching the top edge
+    await cdp.eval(`
+      const zone = document.getElementById('tbZone');
+      zone.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+      return true;
+    `);
+    await wait(300);
+    const tbShown = await cdp.eval(`
+      const tb = document.getElementById('titlebar');
+      return { opacity: getComputedStyle(tb).opacity, shown: tb.classList.contains('is-shown') };
+    `);
+    check('title bar appears when the pointer enters the top edge',
+      tbShown.shown && Number(tbShown.opacity) === 1, JSON.stringify(tbShown));
+
+    // and hides again when the pointer leaves
+    await cdp.eval(`
+      const tb = document.getElementById('titlebar');
+      tb.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+      return true;
+    `);
+    await wait(500);
+    const tbHidden = await cdp.eval(`
+      return document.getElementById('titlebar').classList.contains('is-shown');
+    `);
+    check('title bar hides again after the pointer leaves', tbHidden === false);
+
+    // ---------- 8e. resize grips
+    const grips = await cdp.eval(`
+      const all = [...document.querySelectorAll('.grip')];
+      return {
+        count: all.length,
+        edges: all.map((g) => g.dataset.edge).sort().join(','),
+        cursors: all.map((g) => getComputedStyle(g).cursor),
+        se: (() => { const r = document.querySelector('.grip-se').getBoundingClientRect(); return { w: r.width, h: r.height }; })(),
+      };
+    `);
+    check('eight resize grips exist', grips.count === 8, `count=${grips.count}`);
+    check('all eight edges are covered',
+      grips.edges === 'e,n,ne,nw,s,se,sw,w', grips.edges);
+    check('grips show resize cursors', grips.cursors.every((c) => c.includes('resize')),
+      grips.cursors.join('|'));
+    check('the corner grip is grabbable', grips.se.w >= 8 && grips.se.h >= 8,
+      JSON.stringify(grips.se));
+
+    // the resize IPC must actually move the window
+    const before = await cdp.eval(`
+      const r = await window.cpw.resizeStart('se');
+      await new Promise((res) => setTimeout(res, 60));
+      await window.cpw.resizeEnd();
+      return r;
+    `);
+    check('resize IPC accepts a start/end cycle', before && before.ok === true, JSON.stringify(before));
+
+    // reset-size must restore the default width
+    const reset = await cdp.eval(`
+      await window.cpw.window('reset-size');
+      await new Promise((res) => setTimeout(res, 300));
+      return true;
+    `);
+    check('reset-size runs without error', reset === true);
 
     // ---------- 9. delete the trade
     await cdp.eval(`

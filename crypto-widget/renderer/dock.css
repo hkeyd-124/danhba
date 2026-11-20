@@ -124,3 +124,80 @@
 .widget.is-docked .grip-s { height: 3px; }
 .widget.is-docked .grip-e,
 .widget.is-docked .grip-w { width: 3px; }
+
+/* ================================================================ inside the taskbar */
+/**
+ * 'taskbar' mode: the strip is drawn over the taskbar's own rectangle, in the
+ * same row as the taskbar icons.
+ *
+ * Windows has no supported way to make another process's window a child of the
+ * taskbar (it is a window owned by explorer.exe), so this is an overlay placed
+ * exactly on the taskbar's rectangle at the taskbar's height. To read as part
+ * of the taskbar rather than as a floating card on top of it, the strip drops
+ * its own frame: no border, no radius, and a fill that matches the taskbar's
+ * own dark surface instead of the widget's blue-black card.
+ *
+ * The fill is a flat colour, not a gradient, for the same reason: a gradient
+ * would read as a separate object sitting on the taskbar.
+ */
+.widget.is-taskbar {
+  border: 0;
+  border-radius: 6px;
+  background: rgba(32, 32, 32, .92);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+.widget.is-taskbar .collapsed-view {
+  padding: 0 12px;
+  gap: 8px;
+  /*
+   * The strip is ~40px tall and holds two different type sizes. `center` on a
+   * flex row aligns the BOXES, not the baselines, so the 14px total and the
+   * 11px P&L ended up on different baselines — a visual check caught the
+   * "stair-step". `baseline` puts them on one line, which is what the eye
+   * reads as aligned.
+   */
+  align-items: baseline;
+}
+.widget.is-taskbar .cv-left { align-items: baseline; }
+.widget.is-taskbar .cv-right { align-items: baseline; }
+.widget.is-taskbar .cv-value { font-size: 14px; }
+.widget.is-taskbar .cv-pnl { font-size: 11px; }
+.widget.is-taskbar .cv-pct { font-size: 10px; }
+
+/*
+ * The strip is only ~40px tall and sits over the taskbar, so the auto-hiding
+ * bar's buttons would land on the numbers. Same rule as the edge strip: the
+ * bar still opens on hover, and the P&L yields while it is open.
+ */
+.widget.is-taskbar .titlebar { height: 18px; }
+.widget.is-taskbar .tb-zone { height: 18px; }
+.widget.is-taskbar .wbtn { width: 18px; height: 15px; font-size: 9px; }
+.widget.is-taskbar.tb-open .cv-right { opacity: 0; pointer-events: none; }
+
+/*
+ * "Chỉ chữ" inside the taskbar: the whole point of that style is that nothing
+ * is drawn, so the taskbar fill above must not apply. The text keeps its halo,
+ * which is what makes it readable against the taskbar's own surface.
+ */
+.widget.is-taskbar[data-theme="bare"] {
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: 0;
+}
+
+/* a vertical taskbar cannot host a horizontal strip; the app falls back to
+   'edge' placement, and this class is never applied in that case */
+
+/* ================================================================ settings sheet */
+/*
+ * Three-way segmented control for the placement picker.
+ *
+ * The labels are longer than a two-way split can hold ("Cửa sổ nổi" / "Sát
+ * taskbar" / "Trong taskbar"), so the font drops a notch and the padding
+ * tightens — otherwise the longest label wraps and the control grows a second
+ * line. Kept here rather than in styles.css because it exists only for the
+ * placement control this file is about.
+ */
+.seg-3 .seg-btn { font-size: 11px; padding: 7px 3px; letter-spacing: -.1px; }

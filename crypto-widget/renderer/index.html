@@ -7,6 +7,7 @@
 <title>Crypto Portfolio</title>
 <link rel="stylesheet" href="styles.css" />
 <link rel="stylesheet" href="dock.css" />
+<link rel="stylesheet" href="chart.css" />
 </head>
 <body>
 <div class="widget" id="widget" data-theme="solid">
@@ -50,6 +51,38 @@
         <span class="pill pill-ghost" id="totalPct">—</span>
         <span class="hero-meta" id="posCount"></span>
       </div>
+
+      <!--
+        Portfolio value over time.
+        No axes, no gridlines, no legend: the numbers above already say what the
+        value is, so the chart only has to show the shape of the move. The
+        caption states the window and the change across it, which is the one
+        thing a bare sparkline cannot tell you.
+
+        The caption comes BEFORE the SVG in the DOM on purpose: it sits in
+        normal flow above the line, so the line can never be drawn through it.
+        An absolutely-positioned caption was the first attempt, and a visual
+        check caught the chart's own peak running straight through the text.
+      -->
+      <figure class="chart" id="chartBox" hidden>
+        <figcaption class="chart-cap" id="chartCap"></figcaption>
+        <svg class="chart-svg" id="chartSvg" viewBox="0 0 100 34" preserveAspectRatio="none"
+             aria-hidden="true" focusable="false">
+          <defs>
+            <linearGradient id="chartFillUp" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" class="stop-up-a" />
+              <stop offset="100%" class="stop-up-b" />
+            </linearGradient>
+            <linearGradient id="chartFillDown" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" class="stop-down-a" />
+              <stop offset="100%" class="stop-down-b" />
+            </linearGradient>
+          </defs>
+          <path class="chart-area" id="chartArea" d="" />
+          <path class="chart-line" id="chartLine" d="" />
+          <circle class="chart-dot" id="chartDot" r="1.6" cx="-10" cy="-10" />
+        </svg>
+      </figure>
     </section>
 
     <nav class="tabs" role="tablist">
@@ -160,11 +193,12 @@
 
       <div class="field">
         <span>Vị trí</span>
-        <div class="seg" id="dockSeg">
-          <button type="button" class="seg-btn" data-dock="0">Cửa sổ nổi</button>
-          <button type="button" class="seg-btn" data-dock="1">Trên taskbar</button>
+        <div class="seg seg-3" id="dockSeg">
+          <button type="button" class="seg-btn" data-dock="float">Cửa sổ nổi</button>
+          <button type="button" class="seg-btn" data-dock="edge">Sát taskbar</button>
+          <button type="button" class="seg-btn" data-dock="taskbar">Trong taskbar</button>
         </div>
-        <em class="hint">“Trên taskbar”: thu thành một dải mỏng sát thanh taskbar, chỉ hiện tổng giá trị. Bấm vào để bung ra, bấm ra ngoài để thu lại.</em>
+        <em class="hint" id="dockHint">“Trong taskbar”: dải nằm cùng hàng với các icon trên thanh taskbar, chỉ hiện tổng giá trị. Bấm vào để bung ra, bấm ra ngoài để thu lại.</em>
       </div>
 
       <label class="field" id="blurField">
@@ -175,6 +209,20 @@
         </div>
         <em class="hint">Tắt nếu bạn muốn widget mở mãi cho đến khi tự thu gọn.</em>
       </label>
+
+      <div class="field">
+        <span>Biểu đồ</span>
+        <div class="seg" id="chartSeg">
+          <button type="button" class="seg-btn" data-chart="1">Bật</button>
+          <button type="button" class="seg-btn" data-chart="0">Tắt</button>
+        </div>
+        <div class="seg seg-3" id="rangeSeg" style="margin-top:6px">
+          <button type="button" class="seg-btn" data-range="5">5 phút</button>
+          <button type="button" class="seg-btn" data-range="15">15 phút</button>
+          <button type="button" class="seg-btn" data-range="60">1 giờ</button>
+        </div>
+        <em class="hint">Biểu đồ giá trị danh mục theo thời gian, lấy mẫu mỗi 5 giây và lưu trên máy.</em>
+      </div>
 
       <div class="field">
         <span>Kích thước</span>
@@ -304,6 +352,7 @@
   <div class="grip grip-se" data-edge="se"></div>
   <div class="grip grip-sw" data-edge="sw"></div>
 </div>
+<script src="chart.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

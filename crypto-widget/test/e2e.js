@@ -358,12 +358,12 @@ async function findTarget(port, tries = 60) {
     check('the total value is shown exactly once', noDup.visibleTotals === 1,
       `visible=${noDup.visibleTotals}`);
 
-    // ---------- 7b. taskbar dock mode
+    // ---------- 7b. docked strip ('edge' mode)
     //
     // Docking is a placement mode on the SAME window, so this checks the three
     // things the user asked for: the strip shows only the total, clicking it
     // expands the full UI, and collapsing returns it to the strip.
-    await cdp.eval(`await window.cpw.patchSettings({ dockToTaskbar: true }); return true;`);
+    await cdp.eval(`await window.cpw.patchSettings({ dockMode: 'edge' }); return true;`);
     await wait(700);
     const docked = await cdp.eval(`
       const w = document.getElementById('widget');
@@ -573,7 +573,7 @@ async function findTarget(port, tries = 60) {
     check('the reloaded strip still shows the total',
       dockAfterReload.stripText.includes('76,000'), dockAfterReload.stripText);
 
-    await cdp.eval(`await window.cpw.patchSettings({ dockToTaskbar: false }); return true;`);
+    await cdp.eval(`await window.cpw.patchSettings({ dockMode: 'float' }); return true;`);
     await wait(700);
     const undocked = await cdp.eval(`
       const w = document.getElementById('widget');
@@ -587,6 +587,124 @@ async function findTarget(port, tries = 60) {
     check('turning dock mode off restores the floating window',
       !undocked.dockedClass && !undocked.collapsed && undocked.bodyVisible && undocked.h > 300,
       JSON.stringify(undocked));
+
+    // ---------- 7d. 'taskbar' mode: the strip sits INSIDE the taskbar
+    //
+    // Windows has no API to embed a window into the taskbar, so this mode is an
+    // overlay placed on the taskbar's own rectangle. What can be asserted is
+    // exactly that: the window's rectangle must fall inside the taskbar's
+    // rectangle, at the taskbar's height — not above it, which is what 'edge'
+    // does and what the user complained about.
+    await cdp.eval(`await window.cpw.patchSettings({ dockMode: 'taskbar' }); return true;`);
+    await wait(800);
+
+    const tbMode = await cdp.eval(`
+      const g = await window.cpw.testGeometry();
+      const w = document.getElementById('widget');
+      return {
+        mode: g.mode,
+        bounds: g.bounds,
+        taskbar: g.taskbar,
+        collapsed: g.collapsed,
+        alwaysOnTop: g.alwaysOnTop,
+        isTaskbarClass: w.classList.contains('is-taskbar'),
+        isDockedClass: w.classList.contains('is-docked'),
+        stripText: document.getElementById('collapsedView').innerText.replace(/\\s+/g, ' ').trim(),
+        bodyHidden: getComputedStyle(document.getElementById('body')).display === 'none',
+      };
+    `);
+    check('taskbar mode is reported by the main process', tbMode.mode === 'taskbar', tbMode.mode);
+    check('taskbar mode marks the widget with its own class', tbMode.isTaskbarClass, JSON.stringify(tbMode));
+    check('taskbar mode is still a docked strip', tbMode.isDockedClass && tbMode.collapsed && tbMode.bodyHidden,
+      JSON.stringify(tbMode));
+    check('the taskbar strip shows the total', tbMode.stripText.includes('76,000'), tbMode.stripText);
+
+    // The core assertion: the window must be INSIDE the taskbar rectangle.
+    const b = tbMode.bounds;
+    const t = tbMode.taskbar;
+    check('the strip is vertically inside the taskbar rectangle',
+      b.y >= t.y - 1 && b.y + b.height <= t.y + t.height + 1,
+      `window y=${b.y}..${b.y + b.height} taskbar y=${t.y}..${t.y + t.height}`);
+    check('the strip is no taller than the taskbar',
+      b.height <= t.height, `h=${b.height} taskbarH=${t.height}`);
+    check('the strip is horizontally inside the taskbar',
+      b.x >= t.x - 1 && b.x + b.width <= t.x + t.width + 1,
+      `window x=${b.x}..${b.x + b.width} taskbar x=${t.x}..${t.x + t.width}`);
+    check('the strip is raised above the taskbar in z-order', tbMode.alwaysOnTop === true,
+      String(tbMode.alwaysOnTop));
+
+    // It must look like part of the taskbar, not a card floating on it.
+    const tbLook = await cdp.eval(`
+      const w = document.getElementById('widget');
+      const cs = getComputedStyle(w);
+      return {
+        border: cs.borderTopWidth,
+        radius: cs.borderTopLeftRadius,
+        bg: cs.backgroundColor,
+        bgImage: cs.backgroundImage,
+      };
+    `);
+    check('the taskbar strip drops its border', tbLook.border === '0px', tbLook.border);
+    check('the taskbar strip uses a flat fill, not a gradient',
+      tbLook.bgImage === 'none', tbLook.bgImage);
+
+    // clicking it expands the panel, which must grow AWAY from the taskbar
+    await cdp.eval(`document.getElementById('collapsedView').click(); return true;`);
+    await wait(800);
+    const tbExpanded = await cdp.eval(`
+      const g = await window.cpw.testGeometry();
+      return {
+        collapsed: g.collapsed,
+        bounds: g.bounds,
+        taskbar: g.taskbar,
+        bodyVisible: getComputedStyle(document.getElementById('body')).display !== 'none',
+      };
+    `);
+    check('clicking the taskbar strip expands the full UI',
+      !tbExpanded.collapsed && tbExpanded.bodyVisible, JSON.stringify(tbExpanded));
+    check('the expanded panel does not cover the taskbar',
+      tbExpanded.bounds.y + tbExpanded.bounds.height <= tbExpanded.taskbar.y + 1,
+      `panel bottom=${tbExpanded.bounds.y + tbExpanded.bounds.height} taskbar top=${tbExpanded.taskbar.y}`);
+
+    // and collapsing returns it into the taskbar
+    await cdp.eval(`await window.cpw.window('collapse'); return true;`);
+    await wait(800);
+    const tbBack = await cdp.eval(`
+      const g = await window.cpw.testGeometry();
+      return { collapsed: g.collapsed, bounds: g.bounds, taskbar: g.taskbar };
+    `);
+    check('collapsing returns the strip into the taskbar',
+      tbBack.collapsed
+      && tbBack.bounds.y >= tbBack.taskbar.y - 1
+      && tbBack.bounds.y + tbBack.bounds.height <= tbBack.taskbar.y + tbBack.taskbar.height + 1,
+      JSON.stringify(tbBack));
+
+    // the mode must survive a restart
+    await cdp.send('Page.reload');
+    await wait(2000);
+    const tbAfterReload = await cdp.eval(`
+      const g = await window.cpw.testGeometry();
+      const w = document.getElementById('widget');
+      return {
+        mode: g.mode,
+        collapsed: g.collapsed,
+        isTaskbarClass: w.classList.contains('is-taskbar'),
+        bounds: g.bounds,
+        taskbar: g.taskbar,
+      };
+    `);
+    check('taskbar mode survives a reload',
+      tbAfterReload.mode === 'taskbar' && tbAfterReload.collapsed && tbAfterReload.isTaskbarClass,
+      JSON.stringify(tbAfterReload));
+    check('the reloaded strip is still inside the taskbar',
+      tbAfterReload.bounds.y >= tbAfterReload.taskbar.y - 1
+      && tbAfterReload.bounds.y + tbAfterReload.bounds.height
+        <= tbAfterReload.taskbar.y + tbAfterReload.taskbar.height + 1,
+      JSON.stringify(tbAfterReload));
+
+    // back to floating for the remaining checks
+    await cdp.eval(`await window.cpw.patchSettings({ dockMode: 'float' }); return true;`);
+    await wait(800);
 
     // ---------- 8. persistence across a reload
     await cdp.send('Page.reload');
@@ -944,6 +1062,109 @@ async function findTarget(port, tries = 60) {
     check('delete removes the trade', afterDelete.trades === 0, `trades=${afterDelete.trades}`);
     check('empty state shows', afterDelete.empty);
     check('total resets to zero', afterDelete.total.includes('0.00'), afterDelete.total);
+
+    // ---------- 8i. the chart
+    //
+    // The chart is fed by the main process's own sampler, so this waits for a
+    // real sample to arrive rather than injecting history: the point is to
+    // prove the whole path (sampler -> store -> IPC -> SVG) works.
+    await cdp.eval(`await window.cpw.patchSettings({ chart: true, chartRange: 15 }); return true;`);
+    await wait(300);
+
+    const chartEmpty = await cdp.eval(`
+      const box = document.getElementById('chartBox');
+      return {
+        hidden: box.hidden,
+        hasSvg: !!document.getElementById('chartSvg'),
+        line: document.getElementById('chartLine').getAttribute('d') || '',
+        cap: document.getElementById('chartCap').textContent,
+      };
+    `);
+    check('the chart is present in the expanded panel', !chartEmpty.hidden, JSON.stringify(chartEmpty));
+    check('the chart renders an SVG path element', chartEmpty.hasSvg);
+
+    // wait for the sampler to produce at least two points
+    let chartReady = null;
+    for (let i = 0; i < 30; i++) {
+      chartReady = await cdp.eval(`
+        const d = document.getElementById('chartLine').getAttribute('d') || '';
+        return {
+          d,
+          cap: document.getElementById('chartCap').textContent,
+          cls: document.getElementById('chartBox').className,
+          dotX: document.getElementById('chartDot').getAttribute('cx'),
+          dotY: document.getElementById('chartDot').getAttribute('cy'),
+          area: document.getElementById('chartArea').getAttribute('d') || '',
+        };
+      `);
+      if (chartReady.d.split('L').length > 2) break;
+      await wait(1000);
+    }
+    check('the chart draws a line once samples arrive',
+      chartReady.d.startsWith('M') && chartReady.d.includes('L'), chartReady.d.slice(0, 80));
+    check('the chart path contains no NaN', !chartReady.d.includes('NaN'), chartReady.d.slice(0, 80));
+    check('the chart draws a filled area under the line',
+      chartReady.area.endsWith('Z'), chartReady.area.slice(-40));
+    check('the chart marks the latest point with a dot',
+      Number(chartReady.dotX) >= 0 && Number(chartReady.dotY) >= 0,
+      `cx=${chartReady.dotX} cy=${chartReady.dotY}`);
+    check('the chart caption states the window', /phút|giờ/.test(chartReady.cap), chartReady.cap);
+    check('the chart carries a direction class',
+      /is-(up|down|flat)/.test(chartReady.cls), chartReady.cls);
+
+    // the range control must change the caption
+    await cdp.eval(`document.querySelector('#rangeSeg .seg-btn[data-range="60"]').click(); return true;`);
+    await wait(600);
+    const chartRange = await cdp.eval(`
+      return {
+        cap: document.getElementById('chartCap').textContent,
+        active: document.querySelector('#rangeSeg .seg-btn.is-active')?.dataset.range,
+      };
+    `);
+    check('the range control switches to 1 hour', chartRange.active === '60', chartRange.active);
+    check('the caption follows the range', /giờ/.test(chartRange.cap), chartRange.cap);
+
+    // turning the chart off must remove it, and the choice must persist
+    await cdp.eval(`document.querySelector('#chartSeg .seg-btn[data-chart="0"]').click(); return true;`);
+    await wait(600);
+    const chartOff = await cdp.eval(`return document.getElementById('chartBox').hidden;`);
+    check('turning the chart off hides it', chartOff === true);
+
+    await cdp.send('Page.reload');
+    await wait(2000);
+    const chartAfterReload = await cdp.eval(`
+      return {
+        hidden: document.getElementById('chartBox').hidden,
+        active: document.querySelector('#chartSeg .seg-btn.is-active')?.dataset.chart,
+      };
+    `);
+    check('the chart setting survives a reload', chartAfterReload.hidden === true,
+      JSON.stringify(chartAfterReload));
+
+    // turn it back on and confirm the history itself persisted
+    await cdp.eval(`await window.cpw.patchSettings({ chart: true }); return true;`);
+    await wait(800);
+    const chartRestored = await cdp.eval(`
+      const d = document.getElementById('chartLine').getAttribute('d') || '';
+      return { hidden: document.getElementById('chartBox').hidden, d };
+    `);
+    check('the chart comes back on', chartRestored.hidden === false);
+    check('the sampled history survived the reload',
+      chartRestored.d.startsWith('M'), chartRestored.d.slice(0, 60));
+
+    // the chart must not be drawn in the docked strip
+    await cdp.eval(`await window.cpw.patchSettings({ dockMode: 'edge' }); return true;`);
+    await wait(800);
+    const chartInStrip = await cdp.eval(`
+      return {
+        hidden: document.getElementById('chartBox').hidden,
+        display: getComputedStyle(document.getElementById('chartBox')).display,
+      };
+    `);
+    check('the chart is not drawn in the docked strip',
+      chartInStrip.hidden || chartInStrip.display === 'none', JSON.stringify(chartInStrip));
+    await cdp.eval(`await window.cpw.patchSettings({ dockMode: 'float' }); return true;`);
+    await wait(800);
 
     // ---------- 10. no console errors
     const errs = await cdp.eval(`

@@ -1,0 +1,121 @@
+/**
+ * Portfolio value chart.
+ *
+ * Deliberately bare: no axes, no gridlines, no legend, no tooltip. The hero
+ * numbers above already state the value and the P&L, so the chart's only job is
+ * the SHAPE of the move. Anything else would be decoration competing with the
+ * numbers.
+ *
+ * The SVG uses a 100x34 viewBox with preserveAspectRatio="none", so the path is
+ * resolution-independent and stretches to whatever width the user resizes the
+ * widget to. That is why the stroke uses vector-effect: non-scaling-stroke —
+ * without it, stretching the box would also stretch the line thickness.
+ */
+
+.chart {
+  margin: 9px 0 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+.chart[hidden] { display: none; }
+
+.chart-svg {
+  display: block;
+  width: 100%;
+  height: 40px;
+  overflow: visible;
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--up);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  transition: stroke .25s ease;
+}
+.chart-area {
+  fill: url(#chartFillUp);
+  transition: fill .25s ease;
+}
+.chart-dot {
+  fill: var(--up);
+  transition: fill .25s ease;
+}
+
+/* the gradient stops are painted from CSS so they follow the theme colours */
+.stop-up-a { stop-color: var(--up); stop-opacity: .30; }
+.stop-up-b { stop-color: var(--up); stop-opacity: 0; }
+.stop-down-a { stop-color: var(--down); stop-opacity: .30; }
+.stop-down-b { stop-color: var(--down); stop-opacity: 0; }
+
+/* a falling window is red, a rising one green — the same language as the P&L */
+.chart.is-down .chart-line { stroke: var(--down); }
+.chart.is-down .chart-area { fill: url(#chartFillDown); }
+.chart.is-down .chart-dot { fill: var(--down); }
+.chart.is-flat .chart-line { stroke: var(--muted); }
+.chart.is-flat .chart-area { fill: none; }
+.chart.is-flat .chart-dot { fill: var(--muted); }
+
+/**
+ * The caption sits BELOW the line, not on top of it.
+ *
+ * The first version absolutely-positioned it at the top-right, and a visual
+ * check caught the line running straight through the text — the chart's own
+ * peak is exactly where the caption was. Putting it in normal flow under the
+ * SVG costs 13px of height and removes the collision entirely, at any data
+ * shape, instead of hoping the line stays low.
+ */
+.chart-cap {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  letter-spacing: .1px;
+  text-align: right;
+  line-height: 1.2;
+  pointer-events: none;
+}
+.chart-cap .up { color: var(--up); }
+.chart-cap .down { color: var(--down); }
+
+/* ================================================================ "Chỉ chữ" */
+/**
+ * With no surface behind it, a 1.6px line on a busy wallpaper disappears. The
+ * line gets the same treatment as the text: a stroke of its own, in the halo
+ * colour, painted under the line. `paint-order` does not apply to SVG strokes,
+ * so the outline is a second path drawn beneath — see app.js, which sets the
+ * `--chart-halo` variable from the same halo colour the text uses.
+ */
+.widget[data-theme="bare"] .chart-line {
+  stroke-width: 2;
+  filter: drop-shadow(0 0 1.5px var(--halo-color)) drop-shadow(0 0 1.5px var(--halo-color));
+}
+.widget[data-theme="bare"] .chart-cap {
+  font-size: 11px;
+  font-weight: 600;
+  -webkit-text-stroke-width: calc(0.4px + 1.2px * var(--halo));
+  -webkit-text-stroke-color: var(--halo-color);
+  paint-order: stroke fill;
+  text-shadow: 0 0 calc(2px + 4px * var(--halo)) var(--halo-color);
+}
+.widget[data-theme="bare"] .chart-cap .up {
+  -webkit-text-stroke-color: var(--halo-up);
+  text-shadow: 0 0 calc(2px + 4px * var(--halo)) var(--halo-up);
+}
+.widget[data-theme="bare"] .chart-cap .down {
+  -webkit-text-stroke-color: var(--halo-down);
+  text-shadow: 0 0 calc(2px + 4px * var(--halo)) var(--halo-down);
+}
+
+/* ================================================================ docked strip */
+/*
+ * The strip is 44px tall and shows the total only, so the chart is not drawn
+ * there at all — it would be a 20px squiggle behind the number. The hero block
+ * is hidden in dock mode anyway; this rule makes the intent explicit rather
+ * than relying on that.
+ */
+.widget.is-docked .chart { display: none; }

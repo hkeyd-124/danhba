@@ -21,6 +21,9 @@ contextBridge.exposeInMainWorld('cpw', {
   testAlert: () => ipcRenderer.invoke('test-alert'),
   patchSettings: (p) => ipcRenderer.invoke('patch-settings', p),
   window: (action) => ipcRenderer.invoke('window', action),
+  blurGuard: (on) => ipcRenderer.invoke('blur-guard', on),
+  // test-only; the main process registers it only when CPW_TEST=1
+  testBlur: () => ipcRenderer.invoke('test-blur'),
   resizeStart: (edge) => ipcRenderer.invoke('resize-start', edge),
   resizeEnd: () => ipcRenderer.invoke('resize-end'),
   openDataFolder: () => ipcRenderer.invoke('open-data-folder'),

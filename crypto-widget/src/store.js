@@ -27,6 +27,15 @@ function emptyState() {
       // behind the text and it has to stay legible on any wallpaper.
       halo: 70,
       expandedHeight: 660,
+      // ---- taskbar dock mode ----
+      // When true the widget lives as a thin strip against the Windows taskbar
+      // and only expands while it has focus.
+      dockToTaskbar: false,
+      dockX: null,
+      dockWidth: 420,
+      // Click-outside-to-collapse. On by default: it is what makes the widget
+      // behave like a taskbar flyout rather than a window that stays open.
+      collapseOnBlur: true,
     },
   };
 }

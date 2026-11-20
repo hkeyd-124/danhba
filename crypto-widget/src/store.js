@@ -51,6 +51,11 @@ function emptyState() {
       // Click-outside-to-collapse. On by default: it is what makes the widget
       // behave like a taskbar flyout rather than a window that stays open.
       collapseOnBlur: true,
+      // ---- window role ----
+      // true  : a widget — no taskbar button, no Alt+Tab entry (skipTaskbar),
+      //         and always above other windows.
+      // false : an ordinary application window.
+      widgetRole: true,
       // ---- chart ----
       chart: true,
       // Minutes of history the chart shows.

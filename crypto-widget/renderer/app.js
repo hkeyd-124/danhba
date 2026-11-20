@@ -14,6 +14,7 @@ const state = {
   prices: {},
   feedStatus: 'idle',
   collapsed: false,
+  docked: false,
 };
 
 const COLORS = ['#4f8cff', '#7c5cff', '#16c784', '#f0b429', '#ea3943', '#00c2d1', '#ff7ab6', '#8bd450', '#ff9f45', '#5b8def'];
@@ -250,9 +251,19 @@ function renderSettings() {
   $('btnSound').textContent = `Âm thanh: ${s.sound === false ? 'Tắt' : 'Bật'}`;
   const w = $('widget');
   w.classList.toggle('is-collapsed', !!state.collapsed);
+  w.classList.toggle('is-docked', !!state.docked);
   $('collapsedView').hidden = !state.collapsed;
   $('btnCollapse').textContent = state.collapsed ? '▴' : '▾';
   $('btnCollapse').title = state.collapsed ? 'Mở rộng' : 'Thu gọn';
+
+  // Dock / blur controls reflect the stored settings.
+  document.querySelectorAll('#dockSeg .seg-btn').forEach((b) => {
+    b.classList.toggle('is-active', (b.dataset.dock === '1') === !!state.docked);
+  });
+  document.querySelectorAll('#blurSeg .seg-btn').forEach((b) => {
+    b.classList.toggle('is-active', (b.dataset.blur === '1') === (s.collapseOnBlur !== false));
+  });
+
   applyLook(s);
 }
 
@@ -402,24 +413,41 @@ $('btnResetSize').addEventListener('click', () => {
 
 // ------------------------------------------------------------------ auto-hide title bar
 /**
- * The bar is invisible until the pointer reaches the top edge. The sensor is a
- * separate non-drag strip because a drag region swallows mouse events.
+ * The bar is invisible until the pointer reaches the top edge.
+ *
+ * Hover is detected from a document-level mousemove rather than from a sensor
+ * element. The old sensor was a real element covering the top strip, which
+ * meant it also swallowed clicks there — harmless in a 660px window, but in
+ * dock mode the whole window is 44px tall, so the sensor covered the top half
+ * of the summary and clicking it did nothing. A passive listener has no such
+ * side effect: it observes the pointer without ever taking a click.
  */
 let tbHideTimer = null;
 const tb = $('titlebar');
-const tbZone = $('tbZone');
+const TB_H = 26;
 
 function showTitlebar() {
   clearTimeout(tbHideTimer);
   tb.classList.add('is-shown');
+  // The widget carries the same state so CSS can make room for the buttons.
+  // In the 44px docked strip the buttons would otherwise sit on top of the
+  // numbers; with this class the least important element yields instead.
+  $('widget').classList.add('tb-open');
 }
 function hideTitlebarSoon() {
   clearTimeout(tbHideTimer);
-  tbHideTimer = setTimeout(() => tb.classList.remove('is-shown'), 220);
+  tbHideTimer = setTimeout(() => {
+    tb.classList.remove('is-shown');
+    $('widget').classList.remove('tb-open');
+  }, 220);
 }
 
-tbZone.addEventListener('mouseenter', showTitlebar);
-tbZone.addEventListener('mousemove', showTitlebar);
+document.addEventListener('mousemove', (e) => {
+  const h = state.docked ? 20 : TB_H;
+  if (e.clientY <= h) showTitlebar();
+  else if (tb.classList.contains('is-shown') && !tb.contains(e.target)) hideTitlebarSoon();
+});
+
 tb.addEventListener('mouseenter', showTitlebar);
 tb.addEventListener('mouseleave', hideTitlebarSoon);
 
@@ -468,16 +496,41 @@ document.querySelectorAll('.tab').forEach((btn) => {
 });
 
 // ------------------------------------------------------------------ modals
-function openModal(id) { $(id).hidden = false; }
-function closeModal(id) { $(id).hidden = true; }
+/**
+ * Every modal raises the main process's blur guard while it is open.
+ *
+ * Without this, "collapse when the window loses focus" would fold the widget
+ * away the moment a dialog appeared — the user would be typing into a form
+ * that had just been hidden. The guard is a counter, so nested dialogs (a
+ * confirm opened from inside a modal) are handled correctly.
+ */
+const openModals = new Set();
+function openModal(id) {
+  const el = $(id);
+  if (el.hidden) {
+    el.hidden = false;
+    openModals.add(id);
+    api.blurGuard(true);
+  }
+}
+function closeModal(id) {
+  const el = $(id);
+  if (!el.hidden) {
+    el.hidden = true;
+    if (openModals.delete(id)) api.blurGuard(false);
+  }
+}
+function closeAllModals() {
+  document.querySelectorAll('.modal').forEach((m) => closeModal(m.id));
+}
 document.querySelectorAll('[data-close]').forEach((b) => {
   b.addEventListener('click', () => closeModal(b.dataset.close));
 });
 document.querySelectorAll('.modal').forEach((m) => {
-  m.addEventListener('mousedown', (e) => { if (e.target === m) m.hidden = true; });
+  m.addEventListener('mousedown', (e) => { if (e.target === m) closeModal(m.id); });
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') document.querySelectorAll('.modal').forEach((m) => { m.hidden = true; });
+  if (e.key === 'Escape') closeAllModals();
 });
 
 // segmented controls
@@ -624,7 +677,11 @@ $('tradeList').addEventListener('click', async (e) => {
   } else if (delId) {
     const t = state.trades.find((x) => x.id === delId);
     if (!t) return;
-    if (!confirm(`Xoá lệnh ${String(t.side).toUpperCase() === 'SELL' ? 'bán' : 'mua'} ${fmtQty(t.qty)} ${baseOf(t.symbol)}?`)) return;
+    // A native confirm steals focus, which would collapse the widget mid-flow.
+    api.blurGuard(true);
+    const ok = confirm(`Xoá lệnh ${String(t.side).toUpperCase() === 'SELL' ? 'bán' : 'mua'} ${fmtQty(t.qty)} ${baseOf(t.symbol)}?`);
+    api.blurGuard(false);
+    if (!ok) return;
     await api.deleteTrade(delId);
     toast('Đã xoá lệnh');
   }
@@ -662,6 +719,35 @@ $('posList').addEventListener('click', (e) => {
 $('btnCollapse').addEventListener('click', () => api.window('collapse'));
 $('btnClose').addEventListener('click', () => api.window('hide'));
 $('btnPin').addEventListener('click', () => api.window('pin'));
+
+/**
+ * Click the collapsed strip to expand.
+ *
+ * This is the whole point of dock mode: the strip is a button, not a window.
+ * It is wired on the section itself so a click anywhere on the summary works,
+ * and on keydown so it is reachable from the keyboard.
+ */
+const collapsedView = $('collapsedView');
+function expandFromStrip() {
+  if (!state.collapsed) return;
+  api.window('expand');
+}
+collapsedView.addEventListener('click', expandFromStrip);
+collapsedView.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); expandFromStrip(); }
+});
+
+// dock / blur segmented controls
+$('dockSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('.seg-btn');
+  if (!b) return;
+  api.patchSettings({ dockToTaskbar: b.dataset.dock === '1' });
+});
+$('blurSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('.seg-btn');
+  if (!b) return;
+  api.patchSettings({ collapseOnBlur: b.dataset.blur === '1' });
+});
 $('btnTestAlert').addEventListener('click', () => { api.testAlert(); toast('Đã gửi thông báo thử'); });
 $('btnSound').addEventListener('click', () => {
   api.patchSettings({ sound: state.settings.sound === false });

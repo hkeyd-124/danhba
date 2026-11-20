@@ -175,6 +175,28 @@ npm run test:e2e  # 61 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh bá
                   # theme nền, màu chữ, độ đục, thanh tiêu đề tự ẩn, tay nắm resize
 ```
 
+### Kiểm chứng nền trong suốt thật
+
+Test riêng, chứng minh cửa sổ **thật sự** có kênh alpha chứ không chỉ vẽ màu bán trong suốt:
+
+```bash
+xvfb-run -a -s "-screen 0 1280x900x24 +extension Composite" \
+  sh -c 'xcompmgr -c & sleep 2; node test/transparency.js'
+```
+
+Cách nó chứng minh: trên X11, cửa sổ nhìn xuyên qua được phải có visual **32-bit ARGB**; cửa sổ đục chỉ được cấp visual 24-bit và alpha bị server bỏ qua. Test đọc depth của cửa sổ widget.
+
+Kết quả đo được:
+
+| Điều kiện | Depth | Kết luận |
+|---|---|---|
+| Có compositor (`xcompmgr`) | **32** | Trong suốt thật |
+| Không có compositor | 24 | Đục — đúng như dự đoán |
+
+Sự khác biệt này chính là bằng chứng: depth đổi theo compositor nghĩa là cửa sổ thực sự yêu cầu alpha, chứ không phải luôn đục rồi bị CSS che.
+
+> Trên Windows, Desktop Window Manager luôn bật, nên điều kiện tương đương "có compositor" luôn thoả.
+
 ---
 
 ## Cấu trúc
@@ -193,7 +215,7 @@ crypto-widget/
 │   ├── styles.css         # 6 theme nền, thanh tiêu đề tự ẩn, tay nắm resize
 │   └── app.js             # render + bảng tuỳ chỉnh giao diện
 ├── build/               # icon
-└── test/                # unit + e2e + screenshot harness
+└── test/                # unit + e2e + screenshot + transparency harness
 ```
 
 ---

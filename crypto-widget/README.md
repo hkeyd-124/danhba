@@ -300,11 +300,14 @@ npm test          :: 53 unit test (toán danh mục + feed + cảnh báo + hình
 Test e2e chạy Electron thật (cần Linux + Xvfb, dùng trong CI):
 
 ```bash
-npm run test:e2e  # 145 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh báo, thu gọn, reload,
+npm run test:e2e  # 137 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh báo, thu gọn, reload,
                   # theme nền, màu chữ, độ đục, thanh tiêu đề tự ẩn, tay nắm resize,
                   # 3 chế độ vị trí (kể cả dải nằm TRONG hình chữ nhật taskbar),
-                  # biểu đồ (đường, vùng tô, chấm cuối, chú thích, khung thời gian, lưu sau reload),
-                  # vai trò cửa sổ (không chiếm taskbar, luôn nổi, áp dụng ngay, lưu sau reload)
+                  # biểu đồ (đường, vùng tô, chấm cuối, chú thích, khung thời gian, lưu sau reload)
+
+xvfb-run -a node test/window-role.e2e.js  # 13 assertion riêng cho vai trò cửa sổ:
+                  # không chiếm taskbar, luôn nổi, áp dụng ngay, lưu sau reload,
+                  # và "dấu vân tay" môi trường ổn định cho vòng đo taskbar
 ```
 
 ### Kiểm chứng nền trong suốt thật
@@ -357,8 +360,8 @@ crypto-widget/
 ### Kiểm thử chế độ vị trí và biểu đồ
 
 ```bash
-xvfb-run -a node test/e2e.js        # 145 assertion, gồm 20 cho chế độ ghim + 20 cho biểu đồ
-                                    # + 10 cho vai trò cửa sổ
+xvfb-run -a node test/e2e.js        # 137 assertion, gồm 20 cho chế độ ghim + 20 cho biểu đồ
+xvfb-run -a node test/window-role.e2e.js  # 13 assertion cho vai trò cửa sổ
 xvfb-run -a node test/dock-shots.js # ảnh chụp dải ghim → shots-dock/
 xvfb-run -a node test/shots-v6.js   # ảnh chụp biểu đồ + 3 chế độ vị trí → shots-v6/
 xvfb-run -a node test/dock-measure.js # số đo hình học thật của dải

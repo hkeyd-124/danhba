@@ -19,7 +19,7 @@ let failures = 0;
 function check(name, cond, detail) {
   results.push({ name, ok: !!cond, detail });
   if (!cond) failures++;
-  console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${!cond && detail ? `  \u2192 ${detail}` : ''}`);
+  console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${!cond && detail ? `  → ${detail}` : ''}`);
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -270,7 +270,7 @@ async function findTarget(port, tries = 60) {
     `);
     check('edit modal prefilled', editState.open && editState.price === '60000' && editState.sym === 'BTC',
       JSON.stringify(editState));
-    check('edit modal titled "S\u1eeda l\u1ec7nh"', editState.title === 'S\u1eeda l\u1ec7nh', editState.title);
+    check('edit modal titled "Sửa lệnh"', editState.title === 'Sửa lệnh', editState.title);
 
     await cdp.eval(`
       const el = document.getElementById('tradeQty');
@@ -379,7 +379,7 @@ async function findTarget(port, tries = 60) {
     check('appearance panel opens', lookOpen);
 
     const themeCount = await cdp.eval(`return document.querySelectorAll('#themeGrid .theme').length;`);
-    check('six background styles offered', themeCount === 6, `count=${themeCount}`);
+    check('seven background styles offered', themeCount === 7, `count=${themeCount}`);
 
     // switch to the see-through style
     await cdp.eval(`document.querySelector('.theme[data-theme="clear"]').click(); return true;`);
@@ -543,6 +543,154 @@ async function findTarget(port, tries = 60) {
       return true;
     `);
     check('reset-size runs without error', reset === true);
+
+    // ---------- 8f. "Chỉ chữ" — text only, no surface at all
+    await cdp.eval(`document.getElementById('btnLook').click(); return true;`);
+    await wait(250);
+    await cdp.eval(`document.querySelector('.theme[data-theme="bare"]').click(); return true;`);
+    await wait(500);
+
+    const bare = await cdp.eval(`
+      const w = document.getElementById('widget');
+      const cs = getComputedStyle(w);
+      const hero = getComputedStyle(document.getElementById('totalValue'));
+      const pos = document.querySelector('#posList .pos');
+      const posCs = pos ? getComputedStyle(pos) : null;
+      const foot = getComputedStyle(document.querySelector('.foot'));
+      return {
+        theme: w.dataset.theme,
+        bgImage: cs.backgroundImage,
+        bgColor: cs.backgroundColor,
+        borderW: cs.borderTopWidth,
+        radius: cs.borderTopLeftRadius,
+        shadow: cs.boxShadow,
+        heroShadow: hero.textShadow,
+        heroStrokeWidth: hero.webkitTextStrokeWidth,
+        heroStroke: hero.webkitTextStrokeColor,
+        heroPaintOrder: hero.paintOrder,
+        halo: w.style.getPropertyValue('--halo'),
+        haloColor: w.style.getPropertyValue('--halo-color'),
+        posBg: posCs ? posCs.backgroundColor : null,
+        footBg: foot.backgroundColor,
+        alphaFieldHidden: document.getElementById('alphaField').hidden,
+        haloFieldHidden: document.getElementById('haloField').hidden,
+        alphaFieldShown: getComputedStyle(document.getElementById('alphaField')).display !== 'none',
+        haloFieldShown: getComputedStyle(document.getElementById('haloField')).display !== 'none',
+      };
+    `);
+    check('theme switches to "bare"', bare.theme === 'bare', bare.theme);
+    check('bare paints no background image', bare.bgImage === 'none', bare.bgImage);
+    check('bare paints no background colour',
+      bare.bgColor === 'rgba(0, 0, 0, 0)' || bare.bgColor === 'transparent', bare.bgColor);
+    check('bare has no border', bare.borderW === '0px', bare.borderW);
+    check('bare has no rounded corners', bare.radius === '0px', bare.radius);
+    check('bare has no drop shadow', bare.shadow === 'none', bare.shadow);
+    check('position rows lose their card fill',
+      bare.posBg === 'rgba(0, 0, 0, 0)' || bare.posBg === 'transparent', bare.posBg);
+    check('the footer loses its fill',
+      bare.footBg === 'rgba(0, 0, 0, 0)' || bare.footBg === 'transparent', bare.footBg);
+    check('text carries a halo so it stays readable on any wallpaper',
+      bare.heroShadow && bare.heroShadow !== 'none', bare.heroShadow);
+    // The halo is a real text stroke painted behind the glyph, not a stack of
+    // shadows: a shadow is drawn outside the glyph, so on a busy wallpaper the
+    // gaps between letters still show through. Assert the stroke exists, has a
+    // non-zero width, and is painted behind the fill.
+    check('the halo is a real text stroke, not just a shadow',
+      bare.heroStrokeWidth && parseFloat(bare.heroStrokeWidth) > 0, bare.heroStrokeWidth);
+    check('the stroke is painted behind the glyph fill',
+      bare.heroPaintOrder === 'stroke', bare.heroPaintOrder);
+    check('the stroke colour is the opposite tone to the text',
+      /rgba\(0, 0, 0/.test(bare.heroStroke), bare.heroStroke);
+    check('the opacity slider is hidden when there is no surface',
+      bare.alphaFieldHidden && !bare.alphaFieldShown, JSON.stringify(bare));
+    check('the halo slider appears for this style',
+      !bare.haloFieldHidden && bare.haloFieldShown, JSON.stringify(bare));
+
+    // halo colour must flip with the text colour, or dark text on a dark
+    // wallpaper would be invisible
+    const haloLight = bare.haloColor;
+    await cdp.eval(`document.querySelector('.swatch[data-color="#1f2937"]').click(); return true;`);
+    await wait(500);
+    const haloDark = await cdp.eval(`
+      return document.getElementById('widget').style.getPropertyValue('--halo-color');
+    `);
+    check('light text gets a dark halo', /rgba\(0, 0, 0/.test(haloLight), haloLight);
+    check('dark text gets a light halo', /rgba\(255, 255, 255/.test(haloDark), haloDark);
+
+    // the halo slider must actually change the blur radius
+    await cdp.eval(`
+      const r = document.getElementById('haloRange');
+      r.value = '20';
+      r.dispatchEvent(new Event('input', { bubbles: true }));
+      r.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    `);
+    await wait(500);
+    const haloLow = await cdp.eval(`
+      return {
+        v: document.getElementById('widget').style.getPropertyValue('--halo'),
+        label: document.getElementById('haloVal').textContent,
+        shadow: getComputedStyle(document.getElementById('totalValue')).textShadow,
+      };
+    `);
+    check('halo slider sets the halo strength', Math.abs(Number(haloLow.v) - 0.2) < 0.01, haloLow.v);
+    check('halo label follows the slider', haloLow.label === '20%', haloLow.label);
+
+    // restore a light text colour for the remaining checks
+    await cdp.eval(`document.querySelector('.swatch[data-color="#e8eefc"]').click(); return true;`);
+    await wait(400);
+    await cdp.eval(`document.querySelector('#lookModal [data-close]').click(); return true;`);
+    await wait(200);
+
+    // ---------- 8g. bare style + halo survive a restart
+    await cdp.send('Page.reload');
+    await wait(2000);
+    const bareAfterReload = await cdp.eval(`
+      const w = document.getElementById('widget');
+      return {
+        theme: w.dataset.theme,
+        halo: w.style.getPropertyValue('--halo'),
+        bg: getComputedStyle(w).backgroundImage,
+        border: getComputedStyle(w).borderTopWidth,
+      };
+    `);
+    check('bare style survives a reload', bareAfterReload.theme === 'bare', bareAfterReload.theme);
+    check('halo strength survives a reload',
+      Math.abs(Number(bareAfterReload.halo) - 0.2) < 0.01, bareAfterReload.halo);
+    check('bare is still surface-free after a reload',
+      bareAfterReload.bg === 'none' && bareAfterReload.border === '0px',
+      JSON.stringify(bareAfterReload));
+
+    // ---------- 8h. the title bar must not get stuck open after a click
+    await cdp.eval(`
+      const zone = document.getElementById('tbZone');
+      zone.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+      return true;
+    `);
+    await wait(250);
+    await cdp.eval(`document.getElementById('btnPin').click(); return true;`);
+    await wait(200);
+    await cdp.eval(`
+      const tb = document.getElementById('titlebar');
+      tb.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+      return true;
+    `);
+    await wait(600);
+    const tbAfterClick = await cdp.eval(`
+      const tb = document.getElementById('titlebar');
+      return {
+        shown: tb.classList.contains('is-shown'),
+        opacity: getComputedStyle(tb).opacity,
+        focused: document.activeElement && document.activeElement.id,
+      };
+    `);
+    check('the bar still auto-hides after a button click',
+      tbAfterClick.shown === false && Number(tbAfterClick.opacity) === 0,
+      JSON.stringify(tbAfterClick));
+
+    // put the pin back on so the rest of the run is unchanged
+    await cdp.eval(`await window.cpw.window('pin'); return true;`);
+    await wait(300);
 
     // ---------- 9. delete the trade
     await cdp.eval(`

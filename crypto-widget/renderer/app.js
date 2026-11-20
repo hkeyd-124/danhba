@@ -344,6 +344,9 @@ function renderSettings() {
   document.querySelectorAll('#blurSeg .seg-btn').forEach((b) => {
     b.classList.toggle('is-active', (b.dataset.blur === '1') === (s.collapseOnBlur !== false));
   });
+  document.querySelectorAll('#roleSeg .seg-btn').forEach((b) => {
+    b.classList.toggle('is-active', (b.dataset.role === '1') === (s.widgetRole !== false));
+  });
   document.querySelectorAll('#chartSeg .seg-btn').forEach((b) => {
     b.classList.toggle('is-active', (b.dataset.chart === '1') === (s.chart !== false));
   });
@@ -427,9 +430,9 @@ function applyLook(s) {
    * luminance 0.28, so it got a WHITE halo and only 3.2:1, when a dark halo
    * gives it 6.5:1. Measuring beats guessing.
    */
-  const contrastWith = (hex, halo) => {
+  const contrastWith = (hex, haloName) => {
     const a = luminance(hex);
-    const b = halo === 'dark' ? 0 : 1;
+    const b = haloName === 'dark' ? 0 : 1;
     return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
   };
   const haloFor = (hex) => (contrastWith(hex, 'dark') >= contrastWith(hex, 'light')
@@ -846,6 +849,11 @@ $('blurSeg').addEventListener('click', (e) => {
   const b = e.target.closest('.seg-btn');
   if (!b) return;
   api.patchSettings({ collapseOnBlur: b.dataset.blur === '1' });
+});
+$('roleSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('.seg-btn');
+  if (!b) return;
+  api.patchSettings({ widgetRole: b.dataset.role === '1' });
 });
 $('chartSeg').addEventListener('click', (e) => {
   const b = e.target.closest('.seg-btn');

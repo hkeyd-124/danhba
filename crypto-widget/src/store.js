@@ -16,10 +16,14 @@ function emptyState() {
     settings: {
       alwaysOnTop: true,
       collapsed: false,
-      opacity: 1,
       sound: true,
       quote: 'USDT',
       bounds: null,
+      // ---- appearance (all local, all persisted) ----
+      theme: 'solid',
+      textColor: '#e8eefc',
+      bgAlpha: 1,
+      expandedHeight: 660,
     },
   };
 }

@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('cpw', {
   testAlert: () => ipcRenderer.invoke('test-alert'),
   patchSettings: (p) => ipcRenderer.invoke('patch-settings', p),
   window: (action) => ipcRenderer.invoke('window', action),
+  resizeStart: (edge) => ipcRenderer.invoke('resize-start', edge),
+  resizeEnd: () => ipcRenderer.invoke('resize-end'),
   openDataFolder: () => ipcRenderer.invoke('open-data-folder'),
 
   onState: (cb) => on('state', cb),

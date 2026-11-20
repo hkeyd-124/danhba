@@ -12,6 +12,7 @@ Giá lấy trực tiếp từ **Binance USDⓈ-M Futures**. Toàn bộ dữ li�
 | | |
 |---|---|
 | **Widget thật** | Cửa sổ không viền, luôn nổi trên các cửa sổ khác, kéo thả bằng thanh tiêu đề, thu gọn còn một dòng tổng giá trị, ẩn xuống khay hệ thống. |
+| **Vai trò tiện ích** | Không chiếm chỗ trên taskbar, **không hiện trong Alt+Tab**, luôn nổi trên app khác — nên chuyển sang app khác widget vẫn nằm đó. Xem mục *Vai trò cửa sổ*. |
 | **Ba chế độ vị trí** | Cửa sổ nổi, dải sát taskbar, và **dải nằm trong thanh taskbar** (cùng hàng với các icon). Bấm vào để bung ra, bấm ra ngoài để thu lại. Xem mục dưới. |
 | **Biểu đồ giá trị** | Đường giá trị danh mục theo thời gian (5 phút / 15 phút / 1 giờ), lấy mẫu mỗi 5 giây, lưu trên máy. Không trục, không lưới — chỉ hình dáng và mức thay đổi. |
 | **Giá thời gian thực** | WebSocket `markPrice@1s` của Binance Futures, có REST fallback khi socket rớt. Tự kết nối lại với backoff. |
@@ -130,12 +131,48 @@ Vì vậy chế độ này là **một lớp phủ đặt chính xác lên hình
 | Vị trí | Đúng trong hình chữ nhật taskbar, cùng hàng với icon. |
 | Khi taskbar tự ẩn | Dải vẫn nằm ở mép dưới màn hình và **vẫn hiện** khi taskbar trượt đi — nó không trượt theo. |
 | Khi bấm "Hiện desktop" | Dải **không** bị ẩn theo như các cửa sổ khác. |
-| Khi taskbar đổi kích thước | Dải **không** tự bám theo cho đến lần mở app sau (hoặc khi đổi chế độ vị trí). |
+| Khi taskbar đổi kích thước | Dải **tự bám theo** trong vòng ~2 giây (xem *Vai trò cửa sổ* bên dưới). |
 | Taskbar dọc (cạnh trái/phải) | **Không dùng được** — taskbar dọc chỉ rộng ~48px, không đủ chỗ cho dải ngang. App tự lùi về chế độ *Sát taskbar*. |
 | Nhiều màn hình | Dải luôn ở màn hình chính. |
 | Kéo dải | Kéo ngang được; kéo dọc bị chặn để dải không bị lôi ra khỏi taskbar. |
 
 Nếu bạn cần nó **thật sự** là một phần của taskbar, chỉ có một cách đúng: viết một **deskband / toolbar** bằng C++ (COM `IDeskBand`) và đăng ký với shell — đó là một sản phẩm khác, không phải Electron, và Microsoft đã không còn hỗ trợ chính thức từ Windows 11.
+
+### Vai trò cửa sổ — tiện ích hay cửa sổ app
+
+Bấm **⚙** → mục **Vai trò cửa sổ**.
+
+| Chế độ | Hành vi |
+|---|---|
+| **Tiện ích** (mặc định) | Không có nút trên taskbar, **không có trong Alt+Tab**, luôn nổi trên các app khác. Chuyển sang app khác thì widget vẫn nằm nguyên chỗ cũ. |
+| **Cửa sổ app** | Hành xử như một ứng dụng bình thường: có nút trên taskbar, có trong Alt+Tab, và có thể bị app khác che. |
+
+> **Đổi vai trò áp dụng ngay**, không cần khởi động lại: `setSkipTaskbar` và mức z-order đều là lệnh runtime.
+>
+> Một lưu ý nhỏ: danh sách Alt+Tab do shell quản lý và có thể giữ mục cũ cho đến khi cửa sổ được đăng ký lại. Nếu vẫn thấy widget trong Alt+Tab sau khi đổi sang *Tiện ích*, khởi động lại app là cách chắc chắn nhất.
+
+#### Cơ chế thật, và giới hạn
+
+Điều làm nên hành vi tiện ích là **`skipTaskbar`** của Electron: cửa sổ không hiện trên taskbar, và trên Windows **cũng không hiện trong Alt+Tab** (đây là hệ quả đã được ghi nhận của cách `skipTaskbar` hoạt động — electron/electron#7850, đóng với lý do “giới hạn kỹ thuật của tính năng”, không phải bug). Kèm theo mức always-on-top `screen-saver` — mức cao nhất Electron mở ra và là mức duy nhất nằm trên thanh taskbar — widget không còn chỗ nào để bị ẩn đi.
+
+**Tự bám theo taskbar.** Windows không bắn sự kiện nào khi taskbar đổi kích thước, đổi cạnh, khi DPI đổi, hay khi `explorer.exe` khởi động lại. Vì vậy app đo lại môi trường mỗi **2 giây** (hình chữ nhật taskbar + bounds + work area + scaleFactor) và áp lại vị trí lẫn z-order khi phát hiện thay đổi. Các sự kiện `display-metrics-changed` / `display-added` / `display-removed` xử lý ngay các thay đổi độ phân giải và màn hình.
+
+**Giới hạn cụ thể — đọc mục này:**
+
+| Điều | Thực tế |
+|---|---|
+| Không có nút taskbar, không có trong Alt+Tab | **Đúng** — nhờ `skipTaskbar`. |
+| Luôn nổi trên app khác | **Đúng** — nhờ always-on-top `screen-saver`. |
+| Tự bám khi taskbar đổi kích thước / cạnh / độ phân giải / DPI | **Đúng** — trong vòng ~2 giây. |
+| Sống sót khi `explorer.exe` khởi động lại | **Đúng** — z-order được áp lại ở mỗi vòng đo. |
+| Là một phần của taskbar như tiện ích thời tiết Windows 11 | **Không.** Tiện ích thời tiết do `explorer.exe` tự vẽ *bên trong* cửa sổ taskbar. Cửa sổ của process khác không làm được điều đó: không có API công khai nào để nhận taskbar làm parent. |
+| Task Manager | Vẫn liệt kê process — nó vẫn là một app đang chạy, chỉ không hiện trong app switcher. |
+| Taskbar tự ẩn | Widget vẫn hiện (nó không trượt theo taskbar). |
+| Bấm “Hiện desktop” | Widget không bị ẩn theo. |
+
+Nói ngắn: widget **hành xử** như tiện ích taskbar ở mọi điểm bạn cảm nhận được (không chiếm tab, không mất khi mở app khác, luôn ở đó, tự bám theo taskbar), nhưng về mặt kỹ thuật nó vẫn là một cửa sổ top-level riêng, không phải một phần tử do taskbar vẽ ra.
+
+> **Ghi chú cho người đọc code:** một bản nháp trước đây truyền `type: 'toolbar'` cho `BrowserWindow` với hy vọng nó tạo `WS_EX_TOOLWINDOW` trên Windows. **Điều đó sai** — tuỳ chọn `type` của Electron chỉ có tác dụng trên Linux (`desktop`/`dock`/`toolbar`/`splash`/`notification`) và macOS (`desktop`/`textured`/`panel`), Windows bỏ qua. Tuỳ chọn đó đã bị gỡ, và có unit test chặn việc đưa nó trở lại.
 
 ### Tuỳ chỉnh giao diện
 
@@ -234,7 +271,7 @@ Bấm **"Dữ liệu trên máy"** ở chân widget để mở thư mục chứa
 - Ghi kiểu **atomic** (ghi file tạm rồi rename) nên mất điện giữa chừng không làm hỏng dữ liệu.
 - Nếu file bị hỏng, bản cũ được giữ lại thành `portfolio.json.corrupt-<timestamp>` thay vì bị xoá.
 - Sao lưu = copy file đó. Khôi phục = chép đè lại.
-- Tuỳ chỉnh giao diện nằm trong `settings` của cùng file đó: `theme`, `textColor`, `bgAlpha`, `halo`, `bounds`, `expandedHeight`, `chart`, `chartRange`, và cho chế độ ghim: `dockMode` (`float` / `edge` / `taskbar`), `dockX`, `dockWidth`, `collapseOnBlur`. Xoá các khoá này là về mặc định.
+- Tuỳ chỉnh giao diện nằm trong `settings` của cùng file đó: `theme`, `textColor`, `bgAlpha`, `halo`, `bounds`, `expandedHeight`, `chart`, `chartRange`, `widgetRole`, và cho chế độ ghim: `dockMode` (`float` / `edge` / `taskbar`), `dockX`, `dockWidth`, `collapseOnBlur`. Xoá các khoá này là về mặc định.
 - **Lịch sử biểu đồ** nằm ở khoá `history` của cùng file: mảng `{t, v}` (thời điểm, giá trị danh mục), tối đa 720 mẫu, lấy mẫu mỗi 5 giây. Đây là dữ liệu **chỉ trên máy**, không gửi đi đâu. Xoá khoá này là biểu đồ bắt đầu lại từ trống.
 
 ---
@@ -257,16 +294,17 @@ Muốn tự kiểm chứng: bật Wireshark/Resource Monitor và xem tiến trì
 ## Kiểm thử
 
 ```bat
-npm test          :: 40 unit test (toán danh mục + feed + cảnh báo + hình học biểu đồ)
+npm test          :: 53 unit test (toán danh mục + feed + cảnh báo + hình học biểu đồ + vai trò cửa sổ)
 ```
 
 Test e2e chạy Electron thật (cần Linux + Xvfb, dùng trong CI):
 
 ```bash
-npm run test:e2e  # 137 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh báo, thu gọn, reload,
+npm run test:e2e  # 145 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh báo, thu gọn, reload,
                   # theme nền, màu chữ, độ đục, thanh tiêu đề tự ẩn, tay nắm resize,
                   # 3 chế độ vị trí (kể cả dải nằm TRONG hình chữ nhật taskbar),
-                  # biểu đồ (đường, vùng tô, chấm cuối, chú thích, khung thời gian, lưu sau reload)
+                  # biểu đồ (đường, vùng tô, chấm cuối, chú thích, khung thời gian, lưu sau reload),
+                  # vai trò cửa sổ (không chiếm taskbar, luôn nổi, áp dụng ngay, lưu sau reload)
 ```
 
 ### Kiểm chứng nền trong suốt thật
@@ -303,7 +341,8 @@ crypto-widget/
 │   ├── portfolio.js     # toán danh mục (thuần, không I/O)
 │   ├── feed.js          # Binance Futures WS + REST fallback
 │   ├── alerts.js        # engine cảnh báo (edge-triggered)
-│   └── store.js         # lưu JSON atomic + lịch sử biểu đồ
+│   ├── store.js         # lưu JSON atomic + lịch sử biểu đồ
+│   └── window-role.js   # vai trò cửa sổ (thuần — unit test trực tiếp)
 ├── renderer/
 │   ├── index.html
 │   ├── styles.css         # 7 theme nền (gồm "Chỉ chữ"), thanh tiêu đề tự ẩn, tay nắm resize
@@ -318,7 +357,8 @@ crypto-widget/
 ### Kiểm thử chế độ vị trí và biểu đồ
 
 ```bash
-xvfb-run -a node test/e2e.js        # 137 assertion, gồm 20 cho chế độ ghim + 20 cho biểu đồ
+xvfb-run -a node test/e2e.js        # 145 assertion, gồm 20 cho chế độ ghim + 20 cho biểu đồ
+                                    # + 10 cho vai trò cửa sổ
 xvfb-run -a node test/dock-shots.js # ảnh chụp dải ghim → shots-dock/
 xvfb-run -a node test/shots-v6.js   # ảnh chụp biểu đồ + 3 chế độ vị trí → shots-v6/
 xvfb-run -a node test/dock-measure.js # số đo hình học thật của dải
@@ -337,6 +377,8 @@ Riêng chế độ **Trong taskbar**, các assertion đọc **hình học cửa 
 - **Vì sao `markPrice` chứ không phải `miniTicker`?** `markPrice` là giá dùng để tính P&L và thanh lý trên Futures — đúng thứ một người giữ vị thế futures quan tâm.
 - **Taskbar ở cạnh nào?** Không có API cho việc này, nhưng suy ra được: taskbar là dải mà *work area* loại trừ khỏi *bounds* của màn hình. Taskbar tự ẩn báo work area bằng cả màn hình, khi đó mặc định là `bottom`.
 - **Vì sao dải ghim bỏ nhãn "Tổng giá trị"?** Ở 44px và 300px, nhãn + P&L lấy hết chỗ và **cắt cụt con số** thành `58,60…` — đúng thứ quan trọng nhất lại không đọc được. Ảnh chụp bắt được lỗi này; giờ nhãn bị bỏ, con số không bao giờ bị ellipsis, và P&L bị giới hạn 46% bề rộng.
+- **Vì sao không dùng `type: 'toolbar'` để ẩn khỏi Alt+Tab?** Đã thử và **sai**: tuỳ chọn `type` của Electron chỉ có tác dụng trên Linux (`desktop`/`dock`/`toolbar`/`splash`/`notification`) và macOS (`desktop`/`textured`/`panel`); Windows bỏ qua. Thứ thật sự loại cửa sổ khỏi taskbar **và** Alt+Tab là `skipTaskbar`. Có unit test chặn `type: 'toolbar'` quay lại code.
+- **Vì sao widget được "hiện lại" mỗi 2 giây?** Windows không bắn sự kiện nào khi taskbar đổi kích thước/cạnh, khi DPI đổi, hay khi `explorer.exe` khởi động lại — và nó có thể âm thầm gỡ cờ topmost. Vòng đo 2 giây so sánh "dấu vân tay" môi trường (hình chữ nhật taskbar + bounds + work area + scaleFactor) và áp lại z-order. Cờ `userHidden` phân biệt "Windows ẩn hộ" với "người dùng tự ẩn", nên menu khay vẫn ẩn được.
 - **Vì sao panel bung ra neo vào taskbar chứ không vào work area?** Khi taskbar tự ẩn, work area bằng cả màn hình, nên neo vào nó đặt đáy panel ở đáy màn hình — **đè lên taskbar**, đúng thứ chế độ này sinh ra để tránh. Test e2e bắt được (đáy panel 1024, đỉnh taskbar 976).
 - **Đường dẫn `/market`:** từ 2026 Binance định tuyến stream; `@markPrice` nằm trên `/market`, kết nối không có path sẽ **im lặng không nhận gì**. Code dùng `wss://fstream.binance.com/market/stream?streams=...`.
 - **Cảnh báo edge-triggered:** nếu giá đứng yên trên ngưỡng, bạn không bị spam thông báo. Phải quay lại phía bên kia rồi cắt qua lần nữa (và qua cooldown 5 phút).

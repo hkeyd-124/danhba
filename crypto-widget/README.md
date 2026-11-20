@@ -11,12 +11,13 @@ Giá lấy trực tiếp từ **Binance USDⓈ-M Futures**. Toàn bộ dữ li�
 
 | | |
 |---|---|
-| **Widget thật** | Cửa sổ không viền, luôn nổi trên các cửa sổ khác, kéo thả bằng mép trên, thu gọn còn một dòng tổng giá trị, ẩn xuống khay hệ thống. |
+| **Widget thật** | Cửa sổ không viền, luôn nổi trên các cửa sổ khác, kéo thả bằng thanh tiêu đề, thu gọn còn một dòng tổng giá trị, ẩn xuống khay hệ thống. |
 | **Giá thời gian thực** | WebSocket `markPrice@1s` của Binance Futures, có REST fallback khi socket rớt. Tự kết nối lại với backoff. |
 | **Nhập tay** | Thêm / sửa / xoá lệnh mua–bán: đồng coin, giá vào, số lượng, phí, thời điểm, ghi chú. |
 | **Tính toán** | Giá vốn bình quân gia quyền (phí mua gộp vào giá vốn, phí bán trừ vào lãi thực hiện), P&L thực hiện + chưa thực hiện, % phân bổ danh mục. |
 | **Cảnh báo giá** | Đặt ngưỡng trên/dưới cho từng đồng. Chạm ngưỡng → thông báo Windows + âm thanh. Chỉ bắn khi giá **cắt qua** ngưỡng, có cooldown 5 phút. |
-| **Giao diện tuỳ biến** | 6 kiểu nền (Đậm, Đen, Kính mờ, **Trong suốt**, Aurora, Sáng), độ đục nền 0–100%, 8 màu chữ dựng sẵn + bảng chọn màu tuỳ ý. Tất cả lưu trên máy. |
+| **Giao diện tuỳ biến** | 7 kiểu nền (Đậm, Đen, Kính mờ, **Trong suốt**, **Chỉ chữ**, Aurora, Sáng), độ đục nền 0–100%, 8 màu chữ dựng sẵn + bảng chọn màu tuỳ ý. Tất cả lưu trên máy. |
+| **Chế độ "Chỉ chữ"** | Không nền, không viền, không bóng đổ — chỉ còn chữ, nhìn thẳng ra desktop. Chữ có viền tương phản tự đổi theo màu chữ nên vẫn đọc rõ trên mọi hình nền. |
 | **Thanh tiêu đề tự ẩn** | Chỉ hiện khi rê chuột vào mép trên. Bình thường widget không có thanh tiêu đề — tối giản tối đa. |
 | **Kéo giãn cửa sổ** | Kéo 8 cạnh/góc để đổi kích thước, có nút "Về mặc định". Kích thước được nhớ. |
 | **Riêng tư** | Không tài khoản, không API key, không Firestore, không telemetry. Chỉ một kết nối ra ngoài duy nhất: Binance Futures. |
@@ -87,13 +88,13 @@ Bản build không ký sẽ bị SmartScreen cảnh báo lần đầu chạy. Đ
 2. Tab **Lệnh** → `+ Thêm lệnh` → nhập đồng coin (gõ `BTC` là đủ, tự thêm `USDT`), giá vào, số lượng, phí.
 3. Tab **Danh mục** hiện giá vốn, giá hiện tại, P&L và % phân bổ, cập nhật theo từng tick giá.
 4. Tab **Cảnh báo** → `+ Thêm` → chọn "vượt lên trên" hoặc "giảm xuống dưới", nhập ngưỡng.
-5. Rê chuột vào **mép trên** để hiện thanh tiêu đề: **📌** bật/tắt luôn nổi, **▾** thu gọn, **✕** ẩn xuống khay — bấm icon khay để mở lại.
+5. Nút **📌** bật/tắt luôn nổi. Nút **▾** thu gọn. Nút **✕** ẩn xuống khay — bấm icon khay để mở lại.
 
 ### Tuỳ chỉnh giao diện
 
 Bấm nút **⚙** ở chân widget (cạnh "Dữ liệu trên máy") để mở bảng **Giao diện**.
 
-**Kiểu nền** — 6 lựa chọn:
+**Kiểu nền** — 7 lựa chọn:
 
 | Kiểu | Trông thế nào |
 |---|---|
@@ -101,16 +102,38 @@ Bấm nút **⚙** ở chân widget (cạnh "Dữ liệu trên máy") để mở
 | **Đen** | Đen tuyệt đối, hợp màn hình OLED. |
 | **Kính mờ** | Nền bán trong suốt tông xanh. |
 | **Trong suốt** | Nhìn xuyên qua thấy desktop phía sau. |
+| **Chỉ chữ** | Không nền, không viền, không bóng đổ — chỉ còn chữ. Xem mục dưới. |
 | **Aurora** | Dải màu chuyển sắc xanh–tím. |
 | **Sáng** | Nền sáng cho môi trường nhiều ánh sáng. |
 
-**Độ đục nền** — thanh trượt 0–100%. Kéo xuống thấp để nhìn xuyên qua desktop. Chọn kiểu *Trong suốt* lần đầu sẽ tự hạ độ đục xuống 35% để bạn thấy ngay tác dụng.
+**Độ đục nền** — thanh trượt 0–100%. Kéo xuống thấp để nhìn xuyên qua desktop. Chọn kiểu *Trong suốt* lần đầu sẽ tự hạ độ đục xuống 35% để bạn thấy ngay tác dụng. Thanh trượt này **ẩn** ở kiểu *Chỉ chữ* vì không có nền để làm đục.
 
 **Màu chữ** — 8 ô màu dựng sẵn (trắng, trắng tinh, xanh nhạt, mint, vàng, hồng, than) hoặc bấm ô cầu vồng để chọn màu bất kỳ.
 
 **Kích thước** — kéo 8 cạnh/góc cửa sổ để đổi kích thước, hoặc bấm **Về mặc định** (420×660).
 
 > Mọi tuỳ chỉnh được ghi ngay vào `portfolio.json` và **giữ nguyên sau khi tắt mở app**.
+
+### Chế độ "Chỉ chữ" — không nền, không khung
+
+Chọn kiểu nền **Chỉ chữ** là widget **không vẽ gì cả**: không nền, không viền, không bo góc, không bóng đổ. Mọi pixel không phải chữ đều trong suốt hoàn toàn, nên bạn nhìn thẳng ra desktop phía sau.
+
+**Làm sao chữ vẫn đọc rõ trên mọi hình nền?** Mỗi ký tự có một **viền tương phản** vẽ *phía sau* nét chữ (`-webkit-text-stroke` + `paint-order: stroke fill`), nên hình chữ không bị dày lên hay nhoè đi. Màu viền được chọn tự động bằng cách tính cả hai khả năng rồi lấy cái cho tương phản cao hơn:
+
+- Chữ sáng → viền gần đen
+- Chữ tối → viền gần trắng
+- Chữ vàng, xanh accent → viền đen
+- Số lãi/lỗ xanh lá và đỏ có **viền riêng** của chính nó (không dùng viền của màu chữ chính), vì xanh lá trên nền trắng chỉ đạt 2.2:1 — không đọc được.
+
+**Thanh trượt "Quầng chữ"** (0–100%, mặc định 70%) chỉnh độ dày viền. Tăng lên nếu hình nền desktop của bạn rất sáng hoặc rối.
+
+Đã đo bằng số: mọi phần tử đạt **WCAG AA (≥4.5:1)** so với viền của chính nó, thấp nhất **6.53:1**; chữ chính đạt **21:1**. Kiểm chứng thêm bằng cách so ảnh chụp trên nền trắng tuyệt đối và nền đen tuyệt đối: pixel viền chỉ đổi **3–4/255** trong khi nền đổi 173–230 — tức hình nền không lọt qua được viền.
+
+**Thanh tiêu đề** ở chế độ này còn tối giản hơn: không có dải nền, chỉ 3 nút tròn nhỏ ở góc phải hiện ra khi rê chuột vào mép trên. Vùng còn lại của mép trên vẫn là tay nắm kéo thả.
+
+**Tay nắm resize** không vẽ gì khi bình thường; chỉ hiện một vạch mảnh khi rê chuột đúng vào cạnh/góc — để vẫn kéo giãn được mà không phá vỡ cam kết "không khung".
+
+**Hộp thoại** (thêm lệnh, cài đặt) vẫn có nền riêng — chúng chỉ hiện tạm thời và cần đọc được, nên không áp dụng chế độ trong suốt cho chúng.
 
 ### Thanh tiêu đề tự ẩn
 
@@ -143,7 +166,7 @@ Bấm **"Dữ liệu trên máy"** ở chân widget để mở thư mục chứa
 - Ghi kiểu **atomic** (ghi file tạm rồi rename) nên mất điện giữa chừng không làm hỏng dữ liệu.
 - Nếu file bị hỏng, bản cũ được giữ lại thành `portfolio.json.corrupt-<timestamp>` thay vì bị xoá.
 - Sao lưu = copy file đó. Khôi phục = chép đè lại.
-- Tuỳ chỉnh giao diện nằm trong `settings` của cùng file đó: `theme`, `textColor`, `bgAlpha`, `bounds`, `expandedHeight`. Xoá các khoá này là về mặc định.
+- Tuỳ chỉnh giao diện nằm trong `settings` của cùng file đó: `theme`, `textColor`, `bgAlpha`, `halo`, `bounds`, `expandedHeight`. Xoá các khoá này là về mặc định.
 
 ---
 
@@ -171,9 +194,23 @@ npm test          :: 22 unit test (toán danh mục + feed + cảnh báo)
 Test e2e chạy Electron thật (cần Linux + Xvfb, dùng trong CI):
 
 ```bash
-npm run test:e2e  # 61 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh báo, thu gọn, reload,
-                  # theme nền, màu chữ, độ đục, thanh tiêu đề tự ẩn, tay nắm resize
+npm run test:e2e  # 83 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh báo, thu gọn, reload,
+                  # theme nền, màu chữ, độ đục, thanh tiêu đề tự ẩn, tay nắm resize,
+                  # chế độ "Chỉ chữ" (không nền/viền/bóng, quầng chữ, lưu sau reload)
 ```
+
+### Kiểm chứng độ đọc của chế độ "Chỉ chữ"
+
+Hai test riêng, đo bằng số thay vì nhìn bằng mắt:
+
+```bash
+xvfb-run -a node test/contrast.js     # tương phản WCAG của từng phần tử
+xvfb-run -a node test/legibility.js   # chụp trên nền trắng tuyệt đối và nền đen tuyệt đối
+```
+
+`contrast.js` đọc màu chữ và màu viền thật từ DOM, quy ra tỷ lệ WCAG, và fail nếu bất kỳ phần tử nào dưới 4.5:1. Kết quả hiện tại: thấp nhất **6.53:1**.
+
+`legibility.js` chụp cùng một widget trên hai hình nền đối lập rồi so pixel: nếu viền chữ thật sự chặn được hình nền, pixel của nét chữ phải gần như không đổi. Kết quả: nét chữ đổi **3–4/255** trong khi nền đổi **173–230**.
 
 ### Kiểm chứng nền trong suốt thật
 
@@ -203,7 +240,7 @@ Sự khác biệt này chính là bằng chứng: depth đổi theo compositor n
 
 ```
 crypto-widget/
-├── main.js              # main process: cửa sổ trong suốt, tray, IPC, thông báo, resize
+├── main.js              # main process: cửa sổ, tray, IPC, thông báo
 ├── preload.js           # cầu nối hẹp giữa main và renderer
 ├── src/
 │   ├── portfolio.js     # toán danh mục (thuần, không I/O)
@@ -212,7 +249,7 @@ crypto-widget/
 │   └── store.js         # lưu JSON atomic
 ├── renderer/
 │   ├── index.html
-│   ├── styles.css         # 6 theme nền, thanh tiêu đề tự ẩn, tay nắm resize
+│   ├── styles.css         # 7 theme nền (gồm "Chỉ chữ"), thanh tiêu đề tự ẩn, tay nắm resize
 │   └── app.js             # render + bảng tuỳ chỉnh giao diện
 ├── build/               # icon
 └── test/                # unit + e2e + screenshot + transparency harness
@@ -226,9 +263,7 @@ crypto-widget/
 - **Đường dẫn `/market`:** từ 2026 Binance định tuyến stream; `@markPrice` nằm trên `/market`, kết nối không có path sẽ **im lặng không nhận gì**. Code dùng `wss://fstream.binance.com/market/stream?streams=...`.
 - **Cảnh báo edge-triggered:** nếu giá đứng yên trên ngưỡng, bạn không bị spam thông báo. Phải quay lại phía bên kia rồi cắt qua lần nữa (và qua cooldown 5 phút).
 - **Bán quá số đang giữ:** bị chặn ở số lượng thực có, kèm cảnh báo vàng ở chân widget — không âm thầm tính sai.
-- **Vì sao cửa sổ luôn `transparent: true`?** Để đổi kiểu nền không cần tạo lại cửa sổ — mọi kiểu nền đều do CSS vẽ, nên chuyển theme tức thì và không mất trạng thái (vị trí cuộn, ô đang gõ).
-- **Vì sao phải tự làm resize?** Cửa sổ trong suốt không viền **không có viền resize gốc của Windows**. Renderer vẽ 8 dải vô hình ở cạnh/góc; main process theo con trỏ chuột để đổi kích thước (một timer 16 ms, không gửi IPC mỗi lần di chuột).
-- **Vì sao thanh tiêu đề cần một dải cảm biến riêng?** Vùng `-webkit-app-region: drag` nuốt sự kiện chuột, nên bản thân thanh tiêu đề không tự phát hiện được hover. Dải `.tb-zone` nằm dưới, không phải vùng kéo, nên báo hover tin cậy; khi thanh hiện ra thì nó phủ lên dải đó và nhận việc kéo.
+- **Vì sao viền chữ chứ không phải bóng đổ?** Bóng đổ vẽ *bên ngoài* nét chữ, nên trên hình nền rối các khe giữa chữ vẫn lộ nền; chồng nhiều bóng để bịt khe thì chữ 10–12px bị nhoè thành cục. `-webkit-text-stroke` + `paint-order: stroke fill` vẽ viền *phía sau* nét chữ, nên hình chữ giữ nguyên mà vẫn có viền đặc.
 
 ---
 

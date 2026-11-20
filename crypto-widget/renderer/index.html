@@ -8,15 +8,12 @@
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-<div class="widget" id="widget">
+<div class="widget" id="widget" data-theme="solid">
 
-  <!-- ============ title bar (drag handle) ============ -->
+  <!-- ============ auto-hiding title bar ============ -->
+  <div class="tb-zone" id="tbZone" aria-hidden="true"></div>
   <header class="titlebar" id="titlebar">
-    <div class="brand">
-      <span class="dot" id="feedDot" data-status="idle"></span>
-      <span class="brand-name">Crypto</span>
-      <span class="brand-sub" id="feedLabel">đang kết nối…</span>
-    </div>
+    <div class="tb-drag"></div>
     <div class="winbtns">
       <button class="wbtn" id="btnPin" title="Luôn nổi trên cùng" aria-label="Ghim">📌</button>
       <button class="wbtn" id="btnCollapse" title="Thu gọn" aria-label="Thu gọn">▾</button>
@@ -40,7 +37,11 @@
   <div class="body" id="body">
 
     <section class="hero">
-      <div class="hero-label">Tổng giá trị danh mục</div>
+      <div class="hero-label">
+        <span class="dot" id="feedDot" data-status="idle"></span>
+        <span>Tổng giá trị danh mục</span>
+        <span class="hero-status" id="feedLabel">đang kết nối…</span>
+      </div>
       <div class="hero-value" id="totalValue">—</div>
       <div class="hero-row">
         <span class="pill" id="totalPnl">—</span>
@@ -96,13 +97,70 @@
         <button class="btn btn-ghost btn-sm" id="btnTestAlert">Thử thông báo</button>
         <button class="btn btn-ghost btn-sm" id="btnSound">Âm thanh: Bật</button>
       </div>
-      <p class="notif-warn" id="notifWarn" hidden></p>
     </section>
 
     <footer class="foot">
       <span id="warnLine" class="warn" hidden></span>
       <button class="linkbtn" id="btnData">Dữ liệu trên máy</button>
+      <button class="linkbtn linkbtn-ico" id="btnLook" title="Tuỳ chỉnh giao diện" aria-label="Tuỳ chỉnh giao diện">⚙</button>
     </footer>
+  </div>
+
+  <!-- ============ modal: appearance ============ -->
+  <div class="modal" id="lookModal" hidden>
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2>Giao diện</h2>
+        <button type="button" class="wbtn" data-close="lookModal">✕</button>
+      </div>
+
+      <div class="field">
+        <span>Kiểu nền</span>
+        <div class="themes" id="themeGrid">
+          <button type="button" class="theme" data-theme="solid"><i class="sw sw-solid"></i><b>Đậm</b></button>
+          <button type="button" class="theme" data-theme="midnight"><i class="sw sw-midnight"></i><b>Đen</b></button>
+          <button type="button" class="theme" data-theme="glass"><i class="sw sw-glass"></i><b>Kính mờ</b></button>
+          <button type="button" class="theme" data-theme="clear"><i class="sw sw-clear"></i><b>Trong suốt</b></button>
+          <button type="button" class="theme" data-theme="aurora"><i class="sw sw-aurora"></i><b>Aurora</b></button>
+          <button type="button" class="theme" data-theme="light"><i class="sw sw-light"></i><b>Sáng</b></button>
+        </div>
+        <em class="hint" id="themeHint">Nền đặc, không nhìn xuyên qua.</em>
+      </div>
+
+      <label class="field" id="alphaField">
+        <span>Độ đục nền <b id="alphaVal">100%</b></span>
+        <input type="range" id="alphaRange" min="0" max="100" step="5" />
+        <em class="hint">Kéo xuống để nhìn xuyên qua desktop phía sau.</em>
+      </label>
+
+      <div class="field">
+        <span>Màu chữ</span>
+        <div class="swatches" id="colorGrid">
+          <button type="button" class="swatch" data-color="#e8eefc" style="--c:#e8eefc" title="Trắng"></button>
+          <button type="button" class="swatch" data-color="#ffffff" style="--c:#ffffff" title="Trắng tinh"></button>
+          <button type="button" class="swatch" data-color="#cfe0ff" style="--c:#cfe0ff" title="Xanh nhạt"></button>
+          <button type="button" class="swatch" data-color="#a7f3d0" style="--c:#a7f3d0" title="Mint"></button>
+          <button type="button" class="swatch" data-color="#fde68a" style="--c:#fde68a" title="Vàng"></button>
+          <button type="button" class="swatch" data-color="#fbcfe8" style="--c:#fbcfe8" title="Hồng"></button>
+          <button type="button" class="swatch" data-color="#1f2937" style="--c:#1f2937" title="Than"></button>
+          <label class="swatch swatch-custom" title="Màu tuỳ chọn">
+            <input type="color" id="colorPick" value="#e8eefc" />
+          </label>
+        </div>
+      </div>
+
+      <div class="field">
+        <span>Kích thước</span>
+        <div class="size-row">
+          <button type="button" class="btn btn-ghost btn-sm" id="btnResetSize">Về mặc định</button>
+          <em class="hint" style="margin:0">Kéo viền cửa sổ để đổi kích thước.</em>
+        </div>
+      </div>
+
+      <div class="sheet-actions">
+        <button type="button" class="btn btn-primary" data-close="lookModal">Xong</button>
+      </div>
+    </div>
   </div>
 
   <!-- ============ modal: trade ============ -->
@@ -208,6 +266,16 @@
   </div>
 
   <div class="toast" id="toast" hidden></div>
+
+  <!-- ============ resize grips (transparent frameless window) ============ -->
+  <div class="grip grip-n"  data-edge="n"></div>
+  <div class="grip grip-s"  data-edge="s"></div>
+  <div class="grip grip-e"  data-edge="e"></div>
+  <div class="grip grip-w"  data-edge="w"></div>
+  <div class="grip grip-ne" data-edge="ne"></div>
+  <div class="grip grip-nw" data-edge="nw"></div>
+  <div class="grip grip-se" data-edge="se"></div>
+  <div class="grip grip-sw" data-edge="sw"></div>
 </div>
 <script src="app.js"></script>
 </body>

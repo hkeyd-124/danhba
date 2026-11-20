@@ -1,0 +1,126 @@
+/**
+ * Taskbar dock mode.
+ *
+ * Loaded after styles.css. Kept in its own file because it is a self-contained
+ * placement mode: the widget is moved and resized by the main process, and
+ * everything here only re-lays-out the summary for a 44px-tall window.
+ */
+
+/*
+ * Hover sensor fix.
+ *
+ * A `-webkit-app-region: drag` element swallows mouse events, so the bar
+ * cannot detect the pointer itself. The sensor strip used to be a real element
+ * that took the pointer — which also meant it swallowed CLICKS. Harmless in a
+ * 660px window, fatal in a 44px strip: the 20px sensor covered the top half of
+ * the summary and clicking there did nothing. It is now purely decorative and
+ * hover is detected from a document-level mousemove in app.js.
+ */
+.tb-zone { pointer-events: none; }
+
+/* the summary is a button in dock mode, so it must look and behave like one */
+.collapsed-view { cursor: pointer; }
+.collapsed-view:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* ================================================================ docked strip */
+/**
+ * The strip is deliberately compact — a 44px-tall window has no room for the
+ * 20px value plus 14px padding, so the summary is re-laid out horizontally.
+ *
+ * A visual check caught the first version truncating the total to "58,60…":
+ * the label and the P&L were taking the width, and the ONE thing this strip
+ * exists to show is the total. So the label is dropped entirely (the user
+ * asked for the total only), the value gets the flexible width and is never
+ * ellipsised, and the P&L is capped so it can never squeeze the number out.
+ */
+.widget.is-docked {
+  border-radius: 8px;
+}
+.widget.is-docked .collapsed-view {
+  padding: 0 10px;
+  gap: 6px;
+  align-items: center;
+}
+.widget.is-docked .cv-left {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* the label is redundant in a 44px strip: the number IS the widget */
+.widget.is-docked .cv-label { display: none; }
+.widget.is-docked .cv-value {
+  font-size: 15px;
+  margin-top: 0;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  letter-spacing: -.2px;
+}
+.widget.is-docked .cv-right {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  flex: 0 0 auto;
+  max-width: 46%;
+  transition: opacity .12s ease;
+}
+.widget.is-docked .cv-pnl {
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.widget.is-docked .cv-pct {
+  font-size: 10px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+/*
+ * In dock mode the strip is the whole window, so the auto-hiding title bar
+ * would sit on top of the numbers. A visual check caught exactly that: the
+ * buttons occupy y 0-20 and the value occupies y 13-31, so they overlapped.
+ *
+ * The bar still works (hover the top edge to reach the buttons), but while it
+ * is open the P&L yields — it is the least important thing in a strip whose
+ * job is to show the total. The total itself is never covered.
+ */
+.widget.is-docked .titlebar { height: 20px; }
+.widget.is-docked .tb-zone { height: 20px; }
+.widget.is-docked .wbtn { width: 20px; height: 16px; font-size: 10px; }
+
+.widget.is-docked.tb-open .cv-right {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/*
+ * "Chỉ chữ" + docked: the halo is sized for a 660px panel, where a 3-10px glow
+ * has room. In a 44px strip that same glow bleeds past the top and bottom
+ * edges and gets clipped, which reads as a dirty smear. The strip is also the
+ * one place where the text sits against the taskbar rather than an arbitrary
+ * wallpaper, so a tighter halo is both cleaner and sufficient.
+ */
+.widget.is-docked[data-theme="bare"] {
+  border-radius: 0;
+  -webkit-text-stroke-width: calc(0.5px + 1.1px * var(--halo));
+  text-shadow: 0 0 calc(1px + 2px * var(--halo)) var(--halo-color);
+}
+.widget.is-docked[data-theme="bare"] .up,
+.widget.is-docked[data-theme="bare"] .pill,
+.widget.is-docked[data-theme="bare"] .cv-pnl.up {
+  text-shadow: 0 0 calc(1px + 2px * var(--halo)) var(--halo-up);
+}
+.widget.is-docked[data-theme="bare"] .down,
+.widget.is-docked[data-theme="bare"] .pill.is-down,
+.widget.is-docked[data-theme="bare"] .cv-pnl.down {
+  text-shadow: 0 0 calc(1px + 2px * var(--halo)) var(--halo-down);
+}
+
+/* the strip has no room for the resize grips' 5px dead zone on every edge */
+.widget.is-docked .grip-n,
+.widget.is-docked .grip-s { height: 3px; }
+.widget.is-docked .grip-e,
+.widget.is-docked .grip-w { width: 3px; }

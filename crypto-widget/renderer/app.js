@@ -12,9 +12,11 @@ const state = {
   totals: {},
   warnings: [],
   prices: {},
+  history: [],
   feedStatus: 'idle',
   collapsed: false,
   docked: false,
+  dockMode: 'float',
 };
 
 const COLORS = ['#4f8cff', '#7c5cff', '#16c784', '#f0b429', '#ea3943', '#00c2d1', '#ff7ab6', '#8bd450', '#ff9f45', '#5b8def'];
@@ -114,6 +116,7 @@ function render() {
   renderAlerts();
   renderWarnings();
   renderFeed();
+  renderChart();
   renderSettings();
 }
 
@@ -245,6 +248,81 @@ function renderFeed() {
   $('feedLabel').textContent = STATUS_TEXT[state.feedStatus] || state.feedStatus;
 }
 
+// ------------------------------------------------------------------ chart
+/**
+ * Draw the portfolio value chart.
+ *
+ * The geometry lives in chart.js (pure, unit-tested); this only measures the
+ * box, hands the numbers over, and writes the result into the SVG.
+ *
+ * The viewBox is a fixed 100x34 with preserveAspectRatio="none", so the path is
+ * expressed in a normalised space and the browser stretches it to the real
+ * width. That is what lets the chart follow the window as the user resizes it
+ * without a re-render on every pixel.
+ */
+const CHART_BOX = { width: 100, height: 34, padX: 0, padY: 3 };
+
+function renderChart() {
+  const box = $('chartBox');
+  const s = state.settings || {};
+  const on = s.chart !== false;
+
+  // The chart is meaningless in the docked strip: the hero block is hidden
+  // there, and a 20px squiggle behind the total would be noise.
+  const visible = on && !state.collapsed && !state.docked;
+  box.hidden = !visible;
+  if (!visible) return;
+
+  const rangeMin = Number(s.chartRange) || 15;
+  const built = window.Chart.build(state.history, {
+    now: Date.now(),
+    rangeMs: rangeMin * 60 * 1000,
+    box: CHART_BOX,
+  });
+
+  const line = $('chartLine');
+  const area = $('chartArea');
+  const dot = $('chartDot');
+  const cap = $('chartCap');
+
+  if (built.empty) {
+    line.setAttribute('d', '');
+    area.setAttribute('d', '');
+    dot.setAttribute('cx', '-10');
+    dot.setAttribute('cy', '-10');
+    cap.textContent = 'chưa có dữ liệu';
+    box.className = 'chart is-flat';
+    return;
+  }
+
+  line.setAttribute('d', built.line);
+  area.setAttribute('d', built.area);
+
+  const lastPt = built.projected[built.projected.length - 1];
+  dot.setAttribute('cx', String(lastPt.x));
+  dot.setAttribute('cy', String(lastPt.y));
+
+  box.className = `chart is-${built.direction}`;
+
+  /**
+   * The caption states the window and the change across it.
+   *
+   * A bare sparkline cannot tell you whether it covers five minutes or five
+   * hours, and a shape with no scale is decoration. One short line fixes that
+   * without adding axes or a legend.
+   */
+  const dirCls = built.direction === 'up' ? 'up' : built.direction === 'down' ? 'down' : '';
+  const sign = built.change > 0 ? '+' : built.change < 0 ? '−' : '';
+  const pctSign = built.changePct > 0 ? '+' : built.changePct < 0 ? '−' : '';
+  const rangeLabel = rangeMin >= 60 ? `${Math.round(rangeMin / 60)} giờ` : `${rangeMin} phút`;
+
+  if (built.single) {
+    cap.innerHTML = `<span class="${dirCls}">đang lấy mẫu…</span>`;
+  } else {
+    cap.innerHTML = `${rangeLabel} · <span class="${dirCls}">${sign}${fmtMoney(Math.abs(built.change))} (${pctSign}${Math.abs(built.changePct).toFixed(2)}%)</span>`;
+  }
+}
+
 function renderSettings() {
   const s = state.settings || {};
   $('btnPin').classList.toggle('is-on', s.alwaysOnTop !== false);
@@ -252,17 +330,35 @@ function renderSettings() {
   const w = $('widget');
   w.classList.toggle('is-collapsed', !!state.collapsed);
   w.classList.toggle('is-docked', !!state.docked);
+  // 'taskbar' is a distinct look from 'edge': the strip drops its own frame and
+  // takes the taskbar's surface, so it reads as part of the taskbar.
+  w.classList.toggle('is-taskbar', state.dockMode === 'taskbar');
   $('collapsedView').hidden = !state.collapsed;
   $('btnCollapse').textContent = state.collapsed ? '▴' : '▾';
   $('btnCollapse').title = state.collapsed ? 'Mở rộng' : 'Thu gọn';
 
-  // Dock / blur controls reflect the stored settings.
+  // Placement controls reflect the stored mode.
   document.querySelectorAll('#dockSeg .seg-btn').forEach((b) => {
-    b.classList.toggle('is-active', (b.dataset.dock === '1') === !!state.docked);
+    b.classList.toggle('is-active', b.dataset.dock === (state.dockMode || 'float'));
   });
   document.querySelectorAll('#blurSeg .seg-btn').forEach((b) => {
     b.classList.toggle('is-active', (b.dataset.blur === '1') === (s.collapseOnBlur !== false));
   });
+  document.querySelectorAll('#chartSeg .seg-btn').forEach((b) => {
+    b.classList.toggle('is-active', (b.dataset.chart === '1') === (s.chart !== false));
+  });
+  document.querySelectorAll('#rangeSeg .seg-btn').forEach((b) => {
+    b.classList.toggle('is-active', Number(b.dataset.range) === Number(s.chartRange || 15));
+  });
+
+  // The hint has to describe the mode that is actually selected, or it tells
+  // the user about a placement they are not using.
+  const DOCK_HINT = {
+    float: 'Cửa sổ nổi tự do: kéo thanh tiêu đề để di chuyển, kéo viền để đổi kích thước.',
+    edge: '“Sát taskbar”: dải mỏng nằm ngay trên thanh taskbar, trong vùng làm việc nên không che các nút của taskbar.',
+    taskbar: '“Trong taskbar”: dải nằm cùng hàng với các icon trên thanh taskbar. Bấm vào để bung ra, bấm ra ngoài để thu lại.',
+  };
+  $('dockHint').textContent = DOCK_HINT[state.dockMode] || DOCK_HINT.float;
 
   applyLook(s);
 }
@@ -443,7 +539,10 @@ function hideTitlebarSoon() {
 }
 
 document.addEventListener('mousemove', (e) => {
-  const h = state.docked ? 20 : TB_H;
+  // The sensor band matches the bar's own height in each mode: 26px in the
+  // floating panel, 20px in the edge strip, 18px inside the taskbar. Using one
+  // value everywhere would either miss the bar or steal clicks from the strip.
+  const h = state.dockMode === 'taskbar' ? 18 : state.docked ? 20 : TB_H;
   if (e.clientY <= h) showTitlebar();
   else if (tb.classList.contains('is-shown') && !tb.contains(e.target)) hideTitlebarSoon();
 });
@@ -737,16 +836,26 @@ collapsedView.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); expandFromStrip(); }
 });
 
-// dock / blur segmented controls
+// placement / blur / chart segmented controls
 $('dockSeg').addEventListener('click', (e) => {
   const b = e.target.closest('.seg-btn');
   if (!b) return;
-  api.patchSettings({ dockToTaskbar: b.dataset.dock === '1' });
+  api.patchSettings({ dockMode: b.dataset.dock });
 });
 $('blurSeg').addEventListener('click', (e) => {
   const b = e.target.closest('.seg-btn');
   if (!b) return;
   api.patchSettings({ collapseOnBlur: b.dataset.blur === '1' });
+});
+$('chartSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('.seg-btn');
+  if (!b) return;
+  api.patchSettings({ chart: b.dataset.chart === '1' });
+});
+$('rangeSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('.seg-btn');
+  if (!b) return;
+  api.patchSettings({ chartRange: Number(b.dataset.range) });
 });
 $('btnTestAlert').addEventListener('click', () => { api.testAlert(); toast('Đã gửi thông báo thử'); });
 $('btnSound').addEventListener('click', () => {
@@ -797,6 +906,10 @@ api.onPrices(({ prices }) => {
   state.prices = prices;
   recomputeFromPrices();
   render();
+});
+api.onHistory((h) => {
+  state.history = h || [];
+  renderChart();
 });
 api.onFeedStatus((s) => { state.feedStatus = s; renderFeed(); });
 api.onCollapsed((c) => { state.collapsed = c; renderSettings(); });

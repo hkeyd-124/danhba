@@ -114,7 +114,23 @@ Bấm **⚙** → mục **Vị trí**, hoặc chuột phải icon khay → *Vị
 | Bấm ra ngoài | Tự thu lại về dải. |
 | Bấm ▾ | Thu lại ngay. |
 
-Vị trí ngang, kích thước panel, và chế độ đang chọn đều được nhớ sau khi tắt mở app.
+Vị trí ngang, kích thước panel, **kích thước dải**, và chế độ đang chọn đều được nhớ sau khi tắt mở app.
+
+#### Kéo giãn dải trong taskbar — kích thước được giữ cố định
+
+Kéo mép trái/phải của dải để đổi chiều rộng. Chiều rộng đó **được nhớ riêng** và **không bị reset** khi bạn bấm vào dải để xem chi tiết rồi bấm ra ngoài để thu lại — dải quay về đúng chiều rộng bạn đã kéo, kể cả sau khi khởi động lại app.
+
+| Điều | Chi tiết |
+|---|---|
+| Chiều rộng tối thiểu | **200px** — hẹp hơn nữa thì tổng và P&L không còn đọc được |
+| Chiều rộng tối đa | Bằng chiều rộng taskbar |
+| Chiều cao | **Cố định** theo taskbar — kéo dọc bị chặn để dải không bị lôi ra khỏi taskbar |
+| Dưới 260px | Dải **ẩn số P&L tuyệt đối**, chỉ giữ phần trăm (xem bên dưới) |
+| Về mặc định | **⚙ → Kích thước → Về mặc định** đặt lại **cả** panel và dải |
+
+> **Vì sao dưới 260px lại ẩn số P&L?** Đo thật: ở 250px số P&L bị cắt thành `+4,...` — dấu ba chấm giữa một con số, vừa trông như lỗi vẽ vừa vô nghĩa. Ở 260px thì vừa. Nên dưới ngưỡng đó dải bỏ số tuyệt đối và giữ `+7.69%`, thứ vẫn tự nói được điều gì đó. Số tuyệt đối vẫn nằm trong panel, cách một cú bấm.
+
+> **Vì sao dải và panel có chiều rộng riêng?** Trước đây cả hai dùng chung một số, nên kéo panel làm dải giãn theo, và tệ hơn: kéo dải **không được lưu** (code cũ bỏ qua mọi thay đổi khi đang thu gọn), nên lần bung/thu sau dải nhảy về kích thước cũ. Đó chính là lỗi đã sửa ở bản này.
 
 **Tự thu lại khi bấm ra ngoài** — bật/tắt được ở **⚙ → Vị trí**. Mặc định **Bật**.
 
@@ -130,307 +146,129 @@ Vì vậy chế độ này là **một lớp phủ đặt chính xác lên hình
 
 | Điều | Thực tế |
 |---|---|
-| Vị trí | Đúng trong hình chữ nhật taskbar, cùng hàng với icon. |
-| Khi taskbar tự ẩn | Dải vẫn nằm ở mép dưới màn hình và **vẫn hiện** khi taskbar trượt đi — nó không trượt theo. |
-| Khi bấm "Hiện desktop" | Dải **không** bị ẩn theo như các cửa sổ khác. |
-| Khi taskbar đổi kích thước | Dải **tự bám theo** trong vòng ~2 giây (xem *Vai trò cửa sổ* bên dưới). |
-| Taskbar dọc (cạnh trái/phải) | **Không dùng được** — taskbar dọc chỉ rộng ~48px, không đủ chỗ cho dải ngang. App tự lùi về chế độ *Sát taskbar*. |
-| Nhiều màn hình | Dải luôn ở màn hình chính. |
-| Kéo dải | Kéo ngang được; kéo dọc bị chặn để dải không bị lôi ra khỏi taskbar. |
+| Vị trí | Đúng trong hình chữ nhật taskbar, cùng hàng icon |
+| Taskbar tự ẩn | Dải **vẫn hiện** khi taskbar trượt đi — không trượt theo |
+| Bấm "Hiện desktop" | Dải **không** bị ẩn theo |
+| Taskbar đổi kích thước | Tự bám lại trong ~2 giây |
+| Taskbar dọc | **Không dùng được** (chỉ rộng ~48px) — tự lùi về *Sát taskbar* |
+| Nhiều màn hình | Luôn ở màn hình chính |
+| Kéo dải | Kéo ngang được; kéo dọc bị chặn |
 
-Nếu bạn cần nó **thật sự** là một phần của taskbar, chỉ có một cách đúng: viết một **deskband / toolbar** bằng C++ (COM `IDeskBand`) và đăng ký với shell — đó là một sản phẩm khác, không phải Electron, và Microsoft đã không còn hỗ trợ chính thức từ Windows 11.
+Muốn nó **thật sự** là một phần taskbar thì phải viết **deskband C++ (COM `IDeskBand`)** — sản phẩm khác, không phải Electron, và Microsoft đã bỏ hỗ trợ chính thức từ Windows 11.
 
-### Vai trò cửa sổ — tiện ích hay cửa sổ app
+### Vai trò cửa sổ — vì sao widget không bị ẩn khi mở app khác
 
-Bấm **⚙** → mục **Vai trò cửa sổ**.
+Mặc định widget chạy ở vai trò **Tiện ích**:
 
-| Chế độ | Hành vi |
+| Cơ chế | Tác dụng |
 |---|---|
-| **Tiện ích** (mặc định) | Không có nút trên taskbar, **không có trong Alt+Tab**, luôn nổi trên các app khác. Chuyển sang app khác thì widget vẫn nằm nguyên chỗ cũ. |
-| **Cửa sổ app** | Hành xử như một ứng dụng bình thường: có nút trên taskbar, có trong Alt+Tab, và có thể bị app khác che. |
+| `skipTaskbar` | Không có nút trên taskbar, **và không có trong Alt+Tab** |
+| always-on-top `screen-saver` | Mức cao nhất Electron mở ra, và là mức duy nhất nằm **trên** thanh taskbar |
+| Vòng đo môi trường 2 giây | Tự bám lại vị trí + z-order khi taskbar đổi |
 
-> **Đổi vai trò áp dụng ngay**, không cần khởi động lại: `setSkipTaskbar` và mức z-order đều là lệnh runtime.
->
-> Một lưu ý nhỏ: danh sách Alt+Tab do shell quản lý và có thể giữ mục cũ cho đến khi cửa sổ được đăng ký lại. Nếu vẫn thấy widget trong Alt+Tab sau khi đổi sang *Tiện ích*, khởi động lại app là cách chắc chắn nhất.
+Đổi ở **⚙ → Vai trò cửa sổ** — áp dụng **ngay**, không cần khởi động lại.
 
-#### Cơ chế thật, và giới hạn
-
-Điều làm nên hành vi tiện ích là **`skipTaskbar`** của Electron: cửa sổ không hiện trên taskbar, và trên Windows **cũng không hiện trong Alt+Tab** (đây là hệ quả đã được ghi nhận của cách `skipTaskbar` hoạt động — electron/electron#7850, đóng với lý do “giới hạn kỹ thuật của tính năng”, không phải bug). Kèm theo mức always-on-top `screen-saver` — mức cao nhất Electron mở ra và là mức duy nhất nằm trên thanh taskbar — widget không còn chỗ nào để bị ẩn đi.
-
-**Tự bám theo taskbar.** Windows không bắn sự kiện nào khi taskbar đổi kích thước, đổi cạnh, khi DPI đổi, hay khi `explorer.exe` khởi động lại. Vì vậy app đo lại môi trường mỗi **2 giây** (hình chữ nhật taskbar + bounds + work area + scaleFactor) và áp lại vị trí lẫn z-order khi phát hiện thay đổi. Các sự kiện `display-metrics-changed` / `display-added` / `display-removed` xử lý ngay các thay đổi độ phân giải và màn hình.
-
-**Giới hạn cụ thể — đọc mục này:**
-
-| Điều | Thực tế |
-|---|---|
-| Không có nút taskbar, không có trong Alt+Tab | **Đúng** — nhờ `skipTaskbar`. |
-| Luôn nổi trên app khác | **Đúng** — nhờ always-on-top `screen-saver`. |
-| Tự bám khi taskbar đổi kích thước / cạnh / độ phân giải / DPI | **Đúng** — trong vòng ~2 giây. |
-| Sống sót khi `explorer.exe` khởi động lại | **Đúng** — z-order được áp lại ở mỗi vòng đo. |
-| Là một phần của taskbar như tiện ích thời tiết Windows 11 | **Không.** Tiện ích thời tiết do `explorer.exe` tự vẽ *bên trong* cửa sổ taskbar. Cửa sổ của process khác không làm được điều đó: không có API công khai nào để nhận taskbar làm parent. |
-| Task Manager | Vẫn liệt kê process — nó vẫn là một app đang chạy, chỉ không hiện trong app switcher. |
-| Taskbar tự ẩn | Widget vẫn hiện (nó không trượt theo taskbar). |
-| Bấm “Hiện desktop” | Widget không bị ẩn theo. |
-
-Nói ngắn: widget **hành xử** như tiện ích taskbar ở mọi điểm bạn cảm nhận được (không chiếm tab, không mất khi mở app khác, luôn ở đó, tự bám theo taskbar), nhưng về mặt kỹ thuật nó vẫn là một cửa sổ top-level riêng, không phải một phần tử do taskbar vẽ ra.
-
-> **Ghi chú cho người đọc code:** một bản nháp trước đây truyền `type: 'toolbar'` cho `BrowserWindow` với hy vọng nó tạo `WS_EX_TOOLWINDOW` trên Windows. **Điều đó sai** — tuỳ chọn `type` của Electron chỉ có tác dụng trên Linux (`desktop`/`dock`/`toolbar`/`splash`/`notification`) và macOS (`desktop`/`textured`/`panel`), Windows bỏ qua. Tuỳ chọn đó đã bị gỡ, và có unit test chặn việc đưa nó trở lại.
-
-### Tuỳ chỉnh giao diện
-
-Bấm nút **⚙** ở chân widget (cạnh "Dữ liệu trên máy") để mở bảng **Giao diện**.
-
-**Kiểu nền** — 7 lựa chọn:
-
-| Kiểu | Trông thế nào |
-|---|---|
-| **Đậm** | Nền xanh đen có quầng sáng, mặc định. |
-| **Đen** | Đen tuyệt đối, hợp màn hình OLED. |
-| **Kính mờ** | Nền bán trong suốt tông xanh. |
-| **Trong suốt** | Nhìn xuyên qua thấy desktop phía sau. |
-| **Chỉ chữ** | Không nền, không viền, không bóng đổ — chỉ còn chữ. Xem mục dưới. |
-| **Aurora** | Dải màu chuyển sắc xanh–tím. |
-| **Sáng** | Nền sáng cho môi trường nhiều ánh sáng. |
-
-**Độ đục nền** — thanh trượt 0–100%. Kéo xuống thấp để nhìn xuyên qua desktop. Chọn kiểu *Trong suốt* lần đầu sẽ tự hạ độ đục xuống 35% để bạn thấy ngay tác dụng. Thanh trượt này **ẩn** ở kiểu *Chỉ chữ* vì không có nền để làm đục.
-
-**Màu chữ** — 8 ô màu dựng sẵn (trắng, trắng tinh, xanh nhạt, mint, vàng, hồng, than) hoặc bấm ô cầu vồng để chọn màu bất kỳ.
-
-**Kích thước** — kéo 8 cạnh/góc cửa sổ để đổi kích thước, hoặc bấm **Về mặc định** (420×660).
-
-**Biểu đồ** — bật/tắt, và chọn khung thời gian **5 phút / 15 phút / 1 giờ**. Xem mục dưới.
-
-> Mọi tuỳ chỉnh được ghi ngay vào `portfolio.json` và **giữ nguyên sau khi tắt mở app**.
-
-### Cảnh báo giá — ba kiểu
-
-Tab **Cảnh báo** → `+ Thêm`. Ô **Báo khi giá** có ba lựa chọn:
-
-| Kiểu | Bắn khi nào |
-|---|---|
-| **Vượt lên** | Giá **cắt qua** mốc theo hướng tăng (từ dưới lên). |
-| **Xuống dưới** | Giá **cắt qua** mốc theo hướng giảm (từ trên xuống). |
-| **Chạm mốc** | Giá **chạm** mốc, **bất kể đang tăng hay giảm**. |
-
-Hai kiểu đầu là **edge-triggered**: bắn đúng lúc cắt qua, không bắn lại khi giá cứ đứng mãi bên kia mốc. Phải quay về phía bên kia rồi cắt qua lần nữa mới bắn tiếp.
-
-**"Chạm mốc" khác ở chỗ nào?** Nó không quan tâm hướng. Giá đi từ 99 lên 100 và giá đi từ 101 xuống 100 là **cùng một sự kiện**. Đây là kiểu dùng khi bạn muốn biết "giá đã tới vùng này chưa" mà không muốn đoán trước nó sẽ tới từ đâu.
-
-**Ô Dung sai** (chỉ hiện với "Chạm mốc"):
-
-| | |
-|---|---|
-| Đơn vị | % mỗi bên, quanh mốc |
-| Mặc định | 0,1% (để trống cũng dùng giá trị này) |
-| Tối đa | 50% |
-| Ví dụ | Mốc 100, dung sai 0,5% → bắn khi giá vào khoảng 99,5–100,5 |
-
-**Vì sao cần dung sai?** So sánh bằng đúng bằng (`giá === mốc`) trên một dòng tick gần như không bao giờ đúng — giá *bước qua* mốc chứ không *đậu* trên đó. Nên "chạm" bắn khi:
-
-1. giá đang ở **trong dải** ± dung sai, **hoặc**
-2. khoảng `[giá trước, giá hiện tại]` **quét qua** dải đó.
-
-Trường hợp 2 bắt được cú nhảy: giá có thể đi từ 99 lên 101 mà không hề in ra 100, và đó vẫn là một lần chạm.
-
-**Không bắn lại liên tục:** sau khi bắn, cảnh báo **nằm im** cho tới khi giá rời khỏi dải một khoảng bằng **3 lần dung sai**. Nếu không có ngưỡng trễ này, một mức giá rung lắc quanh mốc sẽ bắn mỗi tick. Cooldown 5 phút vẫn áp thêm lên trên.
-
-**Ô dung sai bị ẩn với "Vượt lên"/"Xuống dưới"** — hai kiểu đó không dùng dung sai. Ẩn hẳn (thay vì làm mờ) để giá trị còn sót lại từ lần nhập trước không thể lọt vào lệnh lưu.
-
-> Dữ liệu cảnh báo cũ vẫn nguyên vẹn: file `portfolio.json` của bản trước được nâng lên schema v3, cảnh báo "vượt lên"/"xuống dưới" giữ nguyên hành vi cũ và **không** bị gắn thêm dung sai.
-
-### Biểu đồ giá trị danh mục
-
-Một đường mảnh ngay dưới tổng giá trị, cho biết danh mục đã đi lên hay đi xuống trong khung thời gian đang chọn.
-
-**Cố tình tối giản:** không trục, không lưới, không chú giải, không tooltip. Con số ở trên đã nói giá trị là bao nhiêu, nên biểu đồ chỉ cần nói **hình dáng** của chuyển động. Dòng chú thích nhỏ bên dưới ghi khung thời gian và mức thay đổi — thứ mà một sparkline trần không thể cho biết.
-
-| Chi tiết | |
-|---|---|
-| Dữ liệu | Giá trị danh mục, lấy mẫu mỗi **5 giây**, tối đa **720 mẫu** (~1 giờ) |
-| Lưu ở đâu | Khoá `history` trong `portfolio.json` — **chỉ trên máy** |
-| Màu | Xanh khi tăng, đỏ khi giảm, xám khi đứng yên — cùng ngôn ngữ với P&L |
-| Khi thêm/xoá lệnh | Ghi mẫu ngay lập tức, để biểu đồ hiện **bước nhảy** thay vì nội suy qua nó |
-| Chế độ "Chỉ chữ" | Đường có quầng riêng để không chìm vào hình nền |
-| Chế độ ghim | **Không vẽ** — dải chỉ cao ~40px, một đường ngoằn ngoèo sau con số chỉ là nhiễu |
-
-> Biểu đồ bắt đầu **trống** ở lần chạy đầu tiên và đầy dần trong vài phút. Đây là dữ liệu quan sát được từ lúc bạn mở app, không phải dữ liệu lịch sử tải về từ Binance — app không tải gì về ngoài giá hiện tại.
-
-### Chế độ "Chỉ chữ" — không nền, không khung
-
-Chọn kiểu nền **Chỉ chữ** là widget **không vẽ gì cả**: không nền, không viền, không bo góc, không bóng đổ. Mọi pixel không phải chữ đều trong suốt hoàn toàn, nên bạn nhìn thẳng ra desktop phía sau.
-
-**Làm sao chữ vẫn đọc rõ trên mọi hình nền?** Mỗi ký tự có một **viền tương phản** vẽ *phía sau* nét chữ (`-webkit-text-stroke` + `paint-order: stroke fill`), nên hình chữ không bị dày lên hay nhoè đi. Màu viền được chọn tự động bằng cách tính cả hai khả năng rồi lấy cái cho tương phản cao hơn:
-
-- Chữ sáng → viền gần đen
-- Chữ tối → viền gần trắng
-- Chữ vàng, xanh accent → viền đen
-- Số lãi/lỗ xanh lá và đỏ có **viền riêng** của chính nó (không dùng viền của màu chữ chính), vì xanh lá trên nền trắng chỉ đạt 2.2:1 — không đọc được.
-
-**Thanh trượt "Quầng chữ"** (0–100%, mặc định 70%) chỉnh độ dày viền. Tăng lên nếu hình nền desktop của bạn rất sáng hoặc rối.
-
-Đã đo bằng số: mọi phần tử đạt **WCAG AA (≥4.5:1)** so với viền của chính nó, thấp nhất **6.53:1**; chữ chính đạt **21:1**. Kiểm chứng thêm bằng cách so ảnh chụp trên nền trắng tuyệt đối và nền đen tuyệt đối: pixel viền chỉ đổi **3–4/255** trong khi nền đổi 173–230 — tức hình nền không lọt qua được viền.
-
-**Thanh tiêu đề** ở chế độ này còn tối giản hơn: không có dải nền, chỉ 3 nút tròn nhỏ ở góc phải hiện ra khi rê chuột vào mép trên. Vùng còn lại của mép trên vẫn là tay nắm kéo thả.
-
-**Tay nắm resize** không vẽ gì khi bình thường; chỉ hiện một vạch mảnh khi rê chuột đúng vào cạnh/góc — để vẫn kéo giãn được mà không phá vỡ cam kết "không khung".
-
-**Hộp thoại** (thêm lệnh, cài đặt) vẫn có nền riêng — chúng chỉ hiện tạm thời và cần đọc được, nên không áp dụng chế độ trong suốt cho chúng. Lớp phủ mờ phía sau hộp thoại **cũng được giữ**: bản đầu để nó trong suốt hoàn toàn, và chữ của widget lọt qua tấm form, đè lên nhãn — ảnh chụp bắt được. "Chỉ chữ" nói về việc widget không có nền, không có nghĩa là hộp thoại phải khó đọc.
-
-### Thanh tiêu đề tự ẩn
-
-Widget **không có thanh tiêu đề** khi bình thường — chỉ có nội dung. Rê chuột vào **mép trên** là thanh tiêu đề hiện ra (mờ dần trong 0.16 giây) với 3 nút: **📌** ghim, **▾** thu gọn, **✕** ẩn. Rời chuột là nó tự ẩn lại.
-
-Vẫn kéo thả widget được: giữ chuột ở mép trên và kéo — vùng đó luôn là tay nắm di chuyển, kể cả khi thanh tiêu đề đang ẩn.
-
-### Phím tắt & thao tác
-
-| Thao tác | Kết quả |
-|---|---|
-| Kéo mép trên | Di chuyển widget |
-| Kéo cạnh / góc | Đổi kích thước widget |
-| Bấm vào dải (khi ghim) | Bung ra đầy đủ |
-| Bấm ra ngoài (khi ghim) | Thu lại về dải |
-| `Esc` | Đóng hộp thoại đang mở |
-| Click icon khay | Hiện / ẩn widget |
-| Chuột phải icon khay | Menu: Hiện/Ẩn, Vị trí (3 chế độ), Luôn nổi, Thoát |
+> **Giới hạn:** Windows không cho app Electron nhúng vào taskbar. Widget vẫn là một cửa sổ top-level riêng (Task Manager vẫn liệt kê process), nhưng nó **không chiếm chỗ trên taskbar**, **không có trong Alt+Tab**, và **luôn nổi trên app khác**.
 
 ---
 
 ## Dữ liệu lưu ở đâu
 
-Một file JSON duy nhất:
+`%APPDATA%\Crypto Portfolio Widget\portfolio.json`
 
-```
-%APPDATA%\crypto-portfolio-widget\portfolio.json
-```
+Mở nhanh: **⚙ → Mở thư mục dữ liệu**.
 
-Bấm **"Dữ liệu trên máy"** ở chân widget để mở thư mục chứa file này.
+- **Lệnh** nằm ở khoá `trades`.
+- Tuỳ chỉnh giao diện nằm trong `settings` của cùng file đó: `theme`, `textColor`, `bgAlpha`, `halo`, `bounds`, `expandedHeight`, `chart`, `chartRange`, `widgetRole`, và cho chế độ ghim: `dockMode` (`float` / `edge` / `taskbar`), `dockX`, `dockWidth`, **`stripWidth`**, `collapseOnBlur`. Xoá các khoá này là về mặc định.
+- **`stripWidth`** là chiều rộng **riêng của dải** khi ghim, tách khỏi `dockWidth` của panel. `null` = "chưa từng kéo" → dải dùng `dockWidth`, đúng như mọi bản trước, nên nâng cấp không làm dải nhảy kích thước. Kéo dải lần đầu là khoá này được ghi.
+- **Lịch sử biểu đồ** nằm ở khoá `history` — tối đa 720 mẫu (~1 giờ), mỗi mẫu 5 giây.
+- **Cảnh báo** nằm ở khoá `alerts`. Mỗi cảnh báo có `direction` (`above` / `below` / `touch`) và — chỉ với `touch` — `tolerance` (% mỗi bên). File của bản cũ (schema v2) được nâng lên v4 khi mở app: cảnh báo cũ giữ nguyên hướng và **không** bị gắn thêm `tolerance`; `stripWidth` được đặt `null` để dải giữ đúng chiều rộng cũ.
 
-- Ghi kiểu **atomic** (ghi file tạm rồi rename) nên mất điện giữa chừng không làm hỏng dữ liệu.
-- Nếu file bị hỏng, bản cũ được giữ lại thành `portfolio.json.corrupt-<timestamp>` thay vì bị xoá.
-- Sao lưu = copy file đó. Khôi phục = chép đè lại.
-- Tuỳ chỉnh giao diện nằm trong `settings` của cùng file đó: `theme`, `textColor`, `bgAlpha`, `halo`, `bounds`, `expandedHeight`, `chart`, `chartRange`, `widgetRole`, và cho chế độ ghim: `dockMode` (`float` / `edge` / `taskbar`), `dockX`, `dockWidth`, `collapseOnBlur`. Xoá các khoá này là về mặc định.
-- **Lịch sử biểu đồ** nằm ở khoá `history` của cùng file: mảng `{t, v}` (thời điểm, giá trị danh mục), tối đa 720 mẫu, lấy mẫu mỗi 5 giây. Đây là dữ liệu **chỉ trên máy**, không gửi đi đâu. Xoá khoá này là biểu đồ bắt đầu lại từ trống.
-- **Cảnh báo** nằm ở khoá `alerts`. Mỗi cảnh báo có `direction` (`above` / `below` / `touch`) và — chỉ với `touch` — `tolerance` (% mỗi bên). File của bản cũ (schema v2) được nâng lên v3 khi mở app: cảnh báo cũ giữ nguyên hướng và **không** bị gắn thêm `tolerance`.
+Ghi file theo kiểu **atomic** (ghi file tạm rồi rename), nên mất điện giữa lúc ghi không làm hỏng dữ liệu. File hỏng được sao lưu thành `portfolio.json.corrupt-<timestamp>` chứ không bị xoá.
 
 ---
 
-## Bảo mật — những gì được đảm bảo
+## Bảo mật
 
-Đây là các biện pháp **được enforce trong code**, không chỉ là lời hứa:
-
-1. **Renderer không có mạng.** `index.html` có CSP `connect-src 'none'`, và main process chặn mọi `will-navigate`, `window.open`, `webview`, và từ chối mọi permission request. Test e2e kiểm chứng `fetch()` từ renderer bị chặn.
-2. **Chỉ main process mở socket**, và chỉ tới `fstream.binance.com` / `fapi.binance.com`.
-3. **`contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`.** Renderer không có `require`, không chạm được filesystem.
-4. **Không có API key, không có chữ ký request.** Chỉ đọc dữ liệu công khai của sàn — không thể đặt lệnh, không thể rút tiền.
-5. **Không telemetry, không analytics, không crash reporting.**
-6. **Tuỳ chỉnh giao diện không thêm kết nối nào.** Nền trong suốt, màu chữ, kích thước cửa sổ đều là CSS và API cửa sổ của Electron — không tải ảnh nền từ mạng, không gọi dịch vụ ngoài. Kết nối ra ngoài vẫn chỉ có Binance Futures.
-
-Muốn tự kiểm chứng: bật Wireshark/Resource Monitor và xem tiến trình chỉ nói chuyện với `binance.com`.
+| | |
+|---|---|
+| Renderer | `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`. Không có `fetch`, không có `WebSocket` — mọi giá đi qua IPC. |
+| Điều hướng | `will-navigate` chặn, `setWindowOpenHandler` từ chối, `will-attach-webview` chặn, mọi permission request bị từ chối. |
+| Kết nối ra ngoài | **Duy nhất** `fapi.binance.com` / `fstream.binance.com` (và `wss://fstream.binance.com`). Không analytics, không crash report, không update check. |
+| Dữ liệu | Chỉ một file JSON trên máy. Không upload, không đồng bộ, không tài khoản. |
 
 ---
 
 ## Kiểm thử
 
 ```bat
-npm test          :: 82 unit test (toán danh mục + feed + cảnh báo + migration dữ liệu + hình học biểu đồ + vai trò cửa sổ)
+npm test          :: 102 unit test (toán danh mục + feed + cảnh báo + migration dữ liệu + hình học biểu đồ + vai trò cửa sổ + kích thước dải ghim)
 ```
 
-Test e2e chạy Electron thật (cần Linux + Xvfb, dùng trong CI):
+E2e cần Xvfb (Linux/CI) vì nó khởi động Electron thật:
 
 ```bash
-npm run test:e2e  # 153 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh báo (cả 3 kiểu, kể cả chạm mốc
+npm run test:e2e  # 171 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh báo (cả 3 kiểu, kể cả chạm mốc
                   # từ cả hai hướng), thu gọn, reload, theme nền, màu chữ, độ đục,
                   # thanh tiêu đề tự ẩn, tay nắm resize,
                   # 3 chế độ vị trí (kể cả dải nằm TRONG hình chữ nhật taskbar),
+                  # kéo giãn dải: lưu chiều rộng, giữ qua bung/thu, giữ qua reload,
+                  #   ngưỡng tối thiểu, bố cục hẹp không cắt cụt, căn dọc, padding đối xứng,
                   # biểu đồ (đường, vùng tô, chấm cuối, chú thích, khung thời gian, lưu sau reload)
-
-xvfb-run -a node test/window-role.e2e.js  # 13 assertion riêng cho vai trò cửa sổ:
-                  # không chiếm taskbar, luôn nổi, áp dụng ngay, lưu sau reload,
-                  # và "dấu vân tay" môi trường ổn định cho vòng đo taskbar
-```
-
-### Kiểm chứng nền trong suốt thật
-
-Test riêng, chứng minh cửa sổ **thật sự** có kênh alpha chứ không chỉ vẽ màu bán trong suốt:
-
-```bash
-xvfb-run -a -s "-screen 0 1280x900x24 +extension Composite" \
-  sh -c 'xcompmgr -c & sleep 2; node test/transparency.js'
-```
-
-Cách nó chứng minh: trên X11, cửa sổ nhìn xuyên qua được phải có visual **32-bit ARGB**; cửa sổ đục chỉ được cấp visual 24-bit và alpha bị server bỏ qua. Test đọc depth của cửa sổ widget.
-
-Kết quả đo được:
-
-| Điều kiện | Depth | Kết luận |
-|---|---|---|
-| Có compositor (`xcompmgr`) | **32** | Trong suốt thật |
-| Không có compositor | 24 | Đục — đúng như dự đoán |
-
-Sự khác biệt này chính là bằng chứng: depth đổi theo compositor nghĩa là cửa sổ thực sự yêu cầu alpha, chứ không phải luôn đục rồi bị CSS che.
-
-> Trên Windows, Desktop Window Manager luôn bật, nên điều kiện tương đương "có compositor" luôn thoả.
-
----
-
-## Cấu trúc
-
-```
-crypto-widget/
-├── main.js              # main process: cửa sổ, tray, IPC, thông báo, đặt vị trí
-├── preload.js           # cầu nối hẹp giữa main và renderer
-├── src/
-│   ├── portfolio.js     # toán danh mục (thuần, không I/O)
-│   ├── feed.js          # Binance Futures WS + REST fallback
-│   ├── alerts.js        # engine cảnh báo (vượt lên / xuống dưới / chạm mốc)
-│   ├── store.js         # lưu JSON atomic + lịch sử biểu đồ
-│   └── window-role.js   # vai trò cửa sổ (thuần — unit test trực tiếp)
-├── renderer/
-│   ├── index.html
-│   ├── styles.css         # 7 theme nền (gồm "Chỉ chữ"), thanh tiêu đề tự ẩn, tay nắm resize
-│   ├── dock.css           # bố cục dải ghim (sát taskbar + trong taskbar)
-│   ├── chart.css          # biểu đồ giá trị
-│   ├── chart.js           # hình học biểu đồ (thuần, không DOM — unit test trực tiếp)
-│   └── app.js             # render + bảng tuỳ chỉnh giao diện
-├── build/               # icon
-└── test/                # unit + e2e + screenshot + transparency harness
 ```
 
 ### Kiểm thử chế độ vị trí và biểu đồ
 
 ```bash
-xvfb-run -a node test/e2e.js        # 153 assertion, gồm 20 cho chế độ ghim + 20 cho biểu đồ
+xvfb-run -a node test/e2e.js        # 171 assertion, gồm 20 cho chế độ ghim + 20 cho biểu đồ
+                                    # + 14 cho kéo giãn dải trong taskbar
+xvfb-run -a node test/strip.e2e.js  # 20 assertion riêng cho kéo giãn dải (chạy độc lập được)
 xvfb-run -a node test/window-role.e2e.js  # 13 assertion cho vai trò cửa sổ
 xvfb-run -a node test/dock-shots.js # ảnh chụp dải ghim → shots-dock/
 xvfb-run -a node test/shots-v6.js   # ảnh chụp biểu đồ + 3 chế độ vị trí → shots-v6/
 xvfb-run -a node test/shots-v8.js   # ảnh chụp form cảnh báo "chạm mốc" → shots-v8/
+xvfb-run -a node test/shots-v9.js   # ảnh chụp dải ở 3 chiều rộng + mức tối thiểu → shots-v9/
+xvfb-run -a node test/measure-v9.js # số đo thật của dải ở 7 chiều rộng (căn dọc, padding, cắt cụt)
 xvfb-run -a node test/dock-measure.js # số đo hình học thật của dải
 ```
 
-Bộ e2e kiểm: dải chỉ hiện tổng (không tab, không hero), cửa sổ thật sự cao ≤60px, bấm dải thì bung ra, thu lại về dải, **tổng không bị cắt** (`scrollWidth ≤ clientWidth`), **nút thanh tiêu đề không đè lên tổng** (so bounding box), P&L nhường chỗ khi thanh tiêu đề mở, bấm ra ngoài thì thu lại, form đang mở thì **không** thu, tắt tuỳ chọn thì blur không làm gì, và chế độ ghim sống sót qua reload.
+---
 
-Riêng chế độ **Trong taskbar**, các assertion đọc **hình học cửa sổ thật** từ main process (hook `test-geometry`), không đọc CSS: cửa sổ phải nằm **bên trong** hình chữ nhật taskbar, cao không quá taskbar, nằm trong biên ngang, được nâng trên taskbar, và khi bung ra thì panel **không** đè lên taskbar.
+## Cấu trúc file
 
-> Sandbox không có window manager nên không thể tạo focus change thật. Vì vậy main process đăng ký hook `test-blur` **chỉ khi `CPW_TEST=1`**, bắn đúng handler mà OS sẽ bắn — để nhánh code thật được kiểm chứ không phải giả định.
+```
+crypto-widget/
+├── main.js              # main process: cửa sổ, vị trí, resize, IPC, khay
+├── preload.js           # cầu nối hẹp (contextBridge)
+├── src/
+│   ├── portfolio.js     # toán danh mục (thuần — unit test trực tiếp)
+│   ├── feed.js          # WebSocket + REST fallback
+│   ├── alerts.js        # engine cảnh báo (thuần)
+│   ├── chart.js         # hình học biểu đồ (thuần)
+│   ├── store.js         # lưu JSON atomic + lịch sử biểu đồ
+│   ├── dock-size.js     # kích thước dải ghim (thuần — unit test trực tiếp)
+│   └── window-role.js   # vai trò cửa sổ (thuần — unit test trực tiếp)
+├── renderer/
+│   ├── index.html
+│   ├── styles.css
+│   ├── dock.css         # chế độ ghim + trong taskbar
+│   └── app.js
+├── build/
+│   └── make-icons.js    # sinh icon từ source
+└── test/
+```
 
 ---
 
 ## Ghi chú kỹ thuật
 
+- **Vì sao kéo dải bị mất kích thước?** Hai lỗi chồng lên nhau. (1) Handler `resized` có điều kiện `!collapsed`, mà dải trong taskbar **luôn** ở trạng thái thu gọn — nên kéo dải xong không lưu gì cả. (2) Dải và panel dùng chung một số `dockWidth`, nên kéo panel cũng làm dải giãn theo. Giờ dải có `stripWidth` riêng, và `src/dock-size.js` quyết định từng trường hợp (nổi/thu gọn, ghim/thu gọn) nên trường hợp "ghim + thu gọn" được lưu đúng. Có 17 unit test + **20 assertion e2e riêng** (`test/strip.e2e.js`); chèn lại điều kiện cũ vào code thì 3 assertion fail ngay (`expected 540, got 420`) — đúng triệu chứng đã báo.
+- **Vì sao dưới 260px dải ẩn số P&L?** Đo thật ở 7 chiều rộng (`test/measure-v9.js`): 250px thì P&L bị cắt thành `+4,...`, 260px thì vừa. Dấu ba chấm giữa một con số vừa trông như lỗi vẽ vừa vô nghĩa, nên dưới ngưỡng đó dải bỏ số tuyệt đối và giữ phần trăm. Ngưỡng là một **container query** trong `renderer/dock.css` (`@container (max-width: 259px)`), không phải media query — media query đo viewport, mà ở đây chính dải LÀ cửa sổ và cửa sổ do main process đổi kích thước. Cũng không dùng class JS: container query tự phản ứng, không cần thêm chỗ nào phải đồng bộ.
+- **Vì sao `save-alert` phải giữ `direction: 'touch'`?** Bản trước ép mọi cảnh báo về `above`/`below` ngay tại ranh giới IPC — renderer có kiểu "chạm mốc", engine hiểu nó, nhưng lệnh lưu ném đi. Hậu quả: cảnh báo "chạm mốc" lưu xong thành "vượt lên", chỉ bắn một chiều. E2e bắt được; giờ `touch` và `tolerance` đi qua nguyên vẹn.
 - **Vì sao `markPrice` chứ không phải `miniTicker`?** `markPrice` là giá dùng để tính P&L và thanh lý trên Futures — đúng thứ một người giữ vị thế futures quan tâm.
 - **Taskbar ở cạnh nào?** Không có API cho việc này, nhưng suy ra được: taskbar là dải mà *work area* loại trừ khỏi *bounds* của màn hình. Taskbar tự ẩn báo work area bằng cả màn hình, khi đó mặc định là `bottom`.
-- **Vì sao dải ghim bỏ nhãn "Tổng giá trị"?** Ở 44px và 300px, nhãn + P&L lấy hết chỗ và **cắt cụt con số** thành `58,60…` — đúng thứ quan trọng nhất lại không đọc được. Ảnh chụp bắt được lỗi này; giờ nhãn bị bỏ, con số không bao giờ bị ellipsis, và P&L bị giới hạn 46% bề rộng.
-- **Vì sao không dùng `type: 'toolbar'` để ẩn khỏi Alt+Tab?** Đã thử và **sai**: tuỳ chọn `type` của Electron chỉ có tác dụng trên Linux (`desktop`/`dock`/`toolbar`/`splash`/`notification`) và macOS (`desktop`/`textured`/`panel`); Windows bỏ qua. Thứ thật sự loại cửa sổ khỏi taskbar **và** Alt+Tab là `skipTaskbar`. Có unit test chặn `type: 'toolbar'` quay lại code.
-- **Vì sao widget được "hiện lại" mỗi 2 giây?** Windows không bắn sự kiện nào khi taskbar đổi kích thước/cạnh, khi DPI đổi, hay khi `explorer.exe` khởi động lại — và nó có thể âm thầm gỡ cờ topmost. Vòng đo 2 giây so sánh "dấu vân tay" môi trường (hình chữ nhật taskbar + bounds + work area + scaleFactor) và áp lại z-order. Cờ `userHidden` phân biệt "Windows ẩn hộ" với "người dùng tự ẩn", nên menu khay vẫn ẩn được.
-- **Vì sao panel bung ra neo vào taskbar chứ không vào work area?** Khi taskbar tự ẩn, work area bằng cả màn hình, nên neo vào nó đặt đáy panel ở đáy màn hình — **đè lên taskbar**, đúng thứ chế độ này sinh ra để tránh. Test e2e bắt được (đáy panel 1024, đỉnh taskbar 976).
-- **Đường dẫn `/market`:** từ 2026 Binance định tuyến stream; `@markPrice` nằm trên `/market`, kết nối không có path sẽ **im lặng không nhận gì**. Code dùng `wss://fstream.binance.com/market/stream?streams=...`.
-- **Cảnh báo edge-triggered:** với "vượt lên"/"xuống dưới", nếu giá đứng yên trên ngưỡng, bạn không bị spam thông báo. Phải quay lại phía bên kia rồi cắt qua lần nữa (và qua cooldown 5 phút).
-- **Vì sao "chạm mốc" cần dung sai?** So sánh bằng đúng bằng (`price === level`) trên một dòng tick gần như không bao giờ đúng — giá *bước qua* mốc chứ không *đậu* trên đó. Nên "chạm" bắn khi giá vào trong dải ± dung sai, **hoặc** khi khoảng `[giá trước, giá hiện tại]` quét qua dải đó. Trường hợp thứ hai bắt được cú nhảy: giá có thể đi từ 99 lên 101 mà không hề in ra 100, và đó vẫn là một lần chạm.
-- **Vì sao "chạm mốc" không bắn lại liên tục?** Sau khi bắn, nó **nằm im** cho tới khi giá rời khỏi dải một khoảng bằng 3 lần dung sai. Nếu không có ngưỡng trễ này, một mức giá rung lắc quanh mốc sẽ bắn mỗi tick. Cooldown 5 phút vẫn áp thêm lên trên.
-- **Vì sao ô dung sai bị ẩn với "vượt lên"/"xuống dưới"?** Hai kiểu đó không dùng dung sai. Ẩn hẳn (thay vì làm mờ) để giá trị còn sót lại từ lần nhập trước không thể lọt vào lệnh lưu.
-- **Vì sao overlay của "Chỉ chữ" vẫn có lớp mờ?** Bản đầu để overlay trong suốt hoàn toàn, và chữ của widget **lọt qua** tấm form, đè lên nhãn — ảnh chụp bắt được. "Chỉ chữ" nói về việc widget không có nền, không có nghĩa là hộp thoại phải khó đọc. Có assertion chặn nó quay lại.
-- **Bán quá số đang giữ:** bị chặn ở số lượng thực có, kèm cảnh báo vàng ở chân widget — không âm thầm tính sai.
+- **Vì sao `type: 'toolbar'` không dùng được?** Tuỳ chọn `type` của `BrowserWindow` chỉ có tác dụng trên **Linux** và **macOS**; Windows bỏ qua hoàn toàn. Thứ thật sự loại cửa sổ khỏi taskbar và Alt+Tab là `skipTaskbar`. Có unit test chặn `type: 'toolbar'` quay lại code.
+- **Vì sao vòng đo 2 giây?** Windows không bắn sự kiện nào khi taskbar đổi kích thước, đổi cạnh, khi DPI đổi, hay khi `explorer.exe` khởi động lại. Cách duy nhất là đo lại và so sánh một "dấu vân tay" gồm hình chữ nhật taskbar + bounds + work area + scaleFactor.
 
 ---
 

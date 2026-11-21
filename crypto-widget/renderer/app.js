@@ -204,16 +204,21 @@ function renderAlerts() {
 
   list.innerHTML = alerts.map((a) => {
     const cur = state.prices[a.symbol];
-    const dirText = a.direction === 'below' ? '↓ dưới' : '↑ trên';
+    const dirText = a.direction === 'touch'
+      ? 'chạm mốc'
+      : a.direction === 'below' ? '↓ dưới' : '↑ trên';
     const dist = Number.isFinite(cur) && cur > 0
       ? ` · cách ${fmtPct(((Number(a.price) - cur) / cur) * 100)}`
       : '';
+    const tolText = a.direction === 'touch'
+      ? ` · ±${Number(a.tolerance) || 0.1}%`
+      : '';
     return `
       <div class="alert ${a.enabled === false ? 'is-off' : ''}" data-id="${esc(a.id)}">
-        <span class="alert-ico">${a.direction === 'below' ? '🔻' : '🔔'}</span>
+        <span class="alert-ico">${a.direction === 'touch' ? '🎯' : a.direction === 'below' ? '🔻' : '🔔'}</span>
         <div class="alert-main">
           <div class="alert-title">${esc(baseOf(a.symbol))} ${dirText} ${fmtPrice(a.price)}</div>
-          <div class="alert-meta">Giá: ${Number.isFinite(cur) ? fmtPrice(cur) : '—'}${dist}${a.note ? ` · ${esc(a.note)}` : ''}</div>
+          <div class="alert-meta">Giá: ${Number.isFinite(cur) ? fmtPrice(cur) : '—'}${dist}${tolText}${a.note ? ` · ${esc(a.note)}` : ''}</div>
         </div>
         <div class="alert-actions">
           <label class="switch" title="Bật/tắt">
@@ -718,9 +723,31 @@ $('tradeForm').addEventListener('submit', async (e) => {
 
 // ------------------------------------------------------------------ alert form
 let alertDirValue = 'above';
+
+const DIR_HINTS = {
+  above: 'Chỉ báo khi giá vượt hẳn lên trên mốc.',
+  below: 'Chỉ báo khi giá giảm xuống dưới mốc.',
+  touch: 'Báo ngay khi giá chạm mốc, dù đang tăng hay giảm.',
+};
+
+/**
+ * The tolerance field only exists for 'touch'. It is hidden rather than
+ * disabled so an above/below alert can never carry a stale tolerance into the
+ * save call — the value is read only when the field is visible.
+ */
+function syncAlertDirUi() {
+  $('alertDir').querySelectorAll('.seg-btn').forEach((b) => {
+    b.classList.toggle('is-active', b.dataset.dir === alertDirValue);
+  });
+  $('alertDirHint').textContent = DIR_HINTS[alertDirValue] || DIR_HINTS.above;
+  $('alertTolField').hidden = alertDirValue !== 'touch';
+}
+
 $('alertDir').addEventListener('click', (e) => {
   const b = e.target.closest('.seg-btn');
-  if (b) alertDirValue = b.dataset.dir;
+  if (!b) return;
+  alertDirValue = b.dataset.dir;
+  syncAlertDirUi();
 });
 
 function updateAlertNow() {
@@ -739,9 +766,10 @@ function openAlertModal(alert) {
   $('alertPrice').value = alert ? alert.price : '';
   $('alertNote').value = alert ? (alert.note || '') : '';
   alertDirValue = alert ? alert.direction : 'above';
-  $('alertDir').querySelectorAll('.seg-btn').forEach((b) => {
-    b.classList.toggle('is-active', b.dataset.dir === alertDirValue);
-  });
+  $('alertTolerance').value = alert && alert.direction === 'touch'
+    ? (alert.tolerance ?? 0.1)
+    : '';
+  syncAlertDirUi();
   updateAlertNow();
   openModal('alertModal');
   setTimeout(() => $('alertSymbol').focus(), 60);
@@ -758,6 +786,9 @@ $('alertForm').addEventListener('submit', async (e) => {
     symbol: $('alertSymbol').value,
     price: parseFloat($('alertPrice').value),
     direction: alertDirValue,
+    // Only sent for 'touch'; the field is hidden otherwise, so its value is
+    // whatever the last touch alert left there and must not leak out.
+    tolerance: alertDirValue === 'touch' ? parseFloat($('alertTolerance').value) : undefined,
     note: $('alertNote').value,
   });
   if (!res || !res.ok) {
@@ -922,7 +953,10 @@ api.onHistory((h) => {
 api.onFeedStatus((s) => { state.feedStatus = s; renderFeed(); });
 api.onCollapsed((c) => { state.collapsed = c; renderSettings(); });
 api.onAlertFired((p) => {
-  toast(`⚡ ${baseOf(p.symbol)} ${p.direction === 'above' ? 'vượt' : 'xuống'} ${fmtPrice(p.level)}`);
+  const verb = p.direction === 'touch'
+    ? 'chạm'
+    : p.direction === 'above' ? 'vượt' : 'xuống';
+  toast(`⚡ ${baseOf(p.symbol)} ${verb} ${fmtPrice(p.level)}`);
 });
 
 api.getState();

@@ -324,10 +324,18 @@
       <div class="field">
         <span>Báo khi giá</span>
         <div class="seg" id="alertDir">
-          <button type="button" class="seg-btn is-active" data-dir="above">Vượt lên trên</button>
-          <button type="button" class="seg-btn" data-dir="below">Giảm xuống dưới</button>
+          <button type="button" class="seg-btn is-active" data-dir="above">Vượt lên</button>
+          <button type="button" class="seg-btn" data-dir="below">Xuống dưới</button>
+          <button type="button" class="seg-btn" data-dir="touch">Chạm mốc</button>
         </div>
+        <em class="hint" id="alertDirHint">Chỉ báo khi giá vượt hẳn lên trên mốc.</em>
       </div>
+
+      <label class="field" id="alertTolField" hidden>
+        <span>Dung sai (%, mỗi bên)</span>
+        <input id="alertTolerance" type="number" step="any" min="0" max="50" placeholder="0.1" />
+        <em class="hint">Giá chỉ cần vào trong khoảng ± dung sai quanh mốc là báo. Để trống dùng 0,1%.</em>
+      </label>
 
       <label class="field">
         <span>Ngưỡng giá (USDT)</span>

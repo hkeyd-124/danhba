@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 /**
  * How many value samples the chart keeps.
@@ -48,6 +48,14 @@ function emptyState() {
       dockMode: 'float',
       dockX: null,
       dockWidth: 420,
+      // Width of the collapsed strip, kept SEPARATE from dockWidth.
+      //
+      // They used to be one number, which meant resizing the panel stretched
+      // the strip and — worse — a strip dragged while collapsed was never
+      // saved at all, so it snapped back on the next expand/collapse.
+      // null = "never dragged": the strip falls back to dockWidth, which is
+      // what every earlier version drew it at.
+      stripWidth: null,
       // Click-outside-to-collapse. On by default: it is what makes the widget
       // behave like a taskbar flyout rather than a window that stays open.
       collapseOnBlur: true,
@@ -107,6 +115,19 @@ class Store {
     }
     if (!['float', 'edge', 'taskbar'].includes(settings.dockMode)) settings.dockMode = 'float';
     delete settings.dockToTaskbar;
+
+    /**
+     * v3 -> v4: the docked strip got its own width (`stripWidth`).
+     *
+     * A file written before this has no stripWidth, and must keep drawing the
+     * strip at the width it always used — `dockWidth`. Leaving it null does
+     * exactly that (see src/dock-size.js), so an existing install looks
+     * unchanged until the user drags the strip for the first time. Writing
+     * dockWidth into stripWidth here would be equivalent today but would
+     * freeze the two together again on the next panel resize.
+     */
+    const sw = Number(settings.stripWidth);
+    settings.stripWidth = Number.isFinite(sw) && sw > 0 ? Math.round(sw) : null;
 
     const history = Array.isArray(parsed.history)
       ? parsed.history

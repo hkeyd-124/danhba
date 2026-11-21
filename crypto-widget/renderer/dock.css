@@ -79,6 +79,25 @@
 }
 
 /*
+ * Narrow strip: drop the absolute P&L, keep the percentage.
+ *
+ * Measured, the two right-hand numbers stop fitting below ~260px: at 250px the
+ * P&L was cut to "+4,..." — an ellipsis in the middle of a number, which is
+ * worse than not showing it, because it looks like a rendering fault and the
+ * digits that survive are meaningless.
+ *
+ * The percentage is the one that still says something on its own ("+7.69%"),
+ * so it is the one that stays. The absolute figure is still in the expanded
+ * panel, one click away.
+ *
+ * The class is set from the renderer's own measured width (see app.js), not
+ * from a media query: the window is resized by the main process, and a media
+ * query on a 44px-tall window would be measuring the wrong thing.
+ */
+.widget.is-docked.is-narrow .cv-pnl { display: none; }
+.widget.is-docked.is-narrow .cv-right { max-width: none; }
+
+/*
  * In dock mode the strip is the whole window, so the auto-hiding title bar
  * would sit on top of the numbers. A visual check caught exactly that: the
  * buttons occupy y 0-20 and the value occupies y 13-31, so they overlapped.

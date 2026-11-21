@@ -18,7 +18,7 @@ Giá lấy trực tiếp từ **Binance USDⓈ-M Futures**. Toàn bộ dữ li�
 | **Giá thời gian thực** | WebSocket `markPrice@1s` của Binance Futures, có REST fallback khi socket rớt. Tự kết nối lại với backoff. |
 | **Nhập tay** | Thêm / sửa / xoá lệnh mua–bán: đồng coin, giá vào, số lượng, phí, thời điểm, ghi chú. |
 | **Tính toán** | Giá vốn bình quân gia quyền (phí mua gộp vào giá vốn, phí bán trừ vào lãi thực hiện), P&L thực hiện + chưa thực hiện, % phân bổ danh mục. |
-| **Cảnh báo giá** | Đặt ngưỡng trên/dưới cho từng đồng. Chạm ngưỡng → thông báo Windows + âm thanh. Chỉ bắn khi giá **cắt qua** ngưỡng, có cooldown 5 phút. |
+| **Cảnh báo giá** | Ba kiểu: **vượt lên trên**, **giảm xuống dưới**, và **chạm mốc** (chỉ cần giá chạm mốc, không cần biết đang tăng hay giảm). Chạm ngưỡng → thông báo Windows + âm thanh. Hai kiểu đầu chỉ bắn khi giá **cắt qua** ngưỡng; kiểu "chạm mốc" bắn khi giá vào trong dải dung sai. Có cooldown 5 phút. |
 | **Giao diện tuỳ biến** | 7 kiểu nền (Đậm, Đen, Kính mờ, **Trong suốt**, **Chỉ chữ**, Aurora, Sáng), độ đục nền 0–100%, 8 màu chữ dựng sẵn + bảng chọn màu tuỳ ý. Tất cả lưu trên máy. |
 | **Chế độ "Chỉ chữ"** | Không nền, không viền, không bóng đổ — chỉ còn chữ, nhìn thẳng ra desktop. Chữ có viền tương phản tự đổi theo màu chữ nên vẫn đọc rõ trên mọi hình nền. |
 | **Thanh tiêu đề tự ẩn** | Chỉ hiện khi rê chuột vào mép trên. Bình thường widget không có thanh tiêu đề — tối giản tối đa. |
@@ -90,7 +90,9 @@ Bản build không ký sẽ bị SmartScreen cảnh báo lần đầu chạy. Đ
 1. Mở app → widget hiện ở góc trên bên phải màn hình.
 2. Tab **Lệnh** → `+ Thêm lệnh` → nhập đồng coin (gõ `BTC` là đủ, tự thêm `USDT`), giá vào, số lượng, phí.
 3. Tab **Danh mục** hiện giá vốn, giá hiện tại, P&L và % phân bổ, cập nhật theo từng tick giá.
-4. Tab **Cảnh báo** → `+ Thêm` → chọn "vượt lên trên" hoặc "giảm xuống dưới", nhập ngưỡng.
+4. Tab **Cảnh báo** → `+ Thêm` → chọn **"Vượt lên"**, **"Xuống dưới"** hoặc **"Chạm mốc"**, nhập ngưỡng.
+   - **Vượt lên** / **Xuống dưới**: chỉ báo khi giá cắt qua ngưỡng theo đúng hướng đó.
+   - **Chạm mốc**: báo ngay khi giá chạm ngưỡng, **dù đang tăng hay giảm**. Có thêm ô **Dung sai** (% mỗi bên) — giá chỉ cần vào trong khoảng ± dung sai quanh mốc là báo. Để trống dùng 0,1%.
 5. Nút **📌** bật/tắt luôn nổi. Nút **▾** thu gọn. Nút **✕** ẩn xuống khay — bấm icon khay để mở lại.
 
 ### Ba chế độ vị trí
@@ -200,6 +202,42 @@ Bấm nút **⚙** ở chân widget (cạnh "Dữ liệu trên máy") để mở
 
 > Mọi tuỳ chỉnh được ghi ngay vào `portfolio.json` và **giữ nguyên sau khi tắt mở app**.
 
+### Cảnh báo giá — ba kiểu
+
+Tab **Cảnh báo** → `+ Thêm`. Ô **Báo khi giá** có ba lựa chọn:
+
+| Kiểu | Bắn khi nào |
+|---|---|
+| **Vượt lên** | Giá **cắt qua** mốc theo hướng tăng (từ dưới lên). |
+| **Xuống dưới** | Giá **cắt qua** mốc theo hướng giảm (từ trên xuống). |
+| **Chạm mốc** | Giá **chạm** mốc, **bất kể đang tăng hay giảm**. |
+
+Hai kiểu đầu là **edge-triggered**: bắn đúng lúc cắt qua, không bắn lại khi giá cứ đứng mãi bên kia mốc. Phải quay về phía bên kia rồi cắt qua lần nữa mới bắn tiếp.
+
+**"Chạm mốc" khác ở chỗ nào?** Nó không quan tâm hướng. Giá đi từ 99 lên 100 và giá đi từ 101 xuống 100 là **cùng một sự kiện**. Đây là kiểu dùng khi bạn muốn biết "giá đã tới vùng này chưa" mà không muốn đoán trước nó sẽ tới từ đâu.
+
+**Ô Dung sai** (chỉ hiện với "Chạm mốc"):
+
+| | |
+|---|---|
+| Đơn vị | % mỗi bên, quanh mốc |
+| Mặc định | 0,1% (để trống cũng dùng giá trị này) |
+| Tối đa | 50% |
+| Ví dụ | Mốc 100, dung sai 0,5% → bắn khi giá vào khoảng 99,5–100,5 |
+
+**Vì sao cần dung sai?** So sánh bằng đúng bằng (`giá === mốc`) trên một dòng tick gần như không bao giờ đúng — giá *bước qua* mốc chứ không *đậu* trên đó. Nên "chạm" bắn khi:
+
+1. giá đang ở **trong dải** ± dung sai, **hoặc**
+2. khoảng `[giá trước, giá hiện tại]` **quét qua** dải đó.
+
+Trường hợp 2 bắt được cú nhảy: giá có thể đi từ 99 lên 101 mà không hề in ra 100, và đó vẫn là một lần chạm.
+
+**Không bắn lại liên tục:** sau khi bắn, cảnh báo **nằm im** cho tới khi giá rời khỏi dải một khoảng bằng **3 lần dung sai**. Nếu không có ngưỡng trễ này, một mức giá rung lắc quanh mốc sẽ bắn mỗi tick. Cooldown 5 phút vẫn áp thêm lên trên.
+
+**Ô dung sai bị ẩn với "Vượt lên"/"Xuống dưới"** — hai kiểu đó không dùng dung sai. Ẩn hẳn (thay vì làm mờ) để giá trị còn sót lại từ lần nhập trước không thể lọt vào lệnh lưu.
+
+> Dữ liệu cảnh báo cũ vẫn nguyên vẹn: file `portfolio.json` của bản trước được nâng lên schema v3, cảnh báo "vượt lên"/"xuống dưới" giữ nguyên hành vi cũ và **không** bị gắn thêm dung sai.
+
 ### Biểu đồ giá trị danh mục
 
 Một đường mảnh ngay dưới tổng giá trị, cho biết danh mục đã đi lên hay đi xuống trong khung thời gian đang chọn.
@@ -236,7 +274,7 @@ Chọn kiểu nền **Chỉ chữ** là widget **không vẽ gì cả**: không 
 
 **Tay nắm resize** không vẽ gì khi bình thường; chỉ hiện một vạch mảnh khi rê chuột đúng vào cạnh/góc — để vẫn kéo giãn được mà không phá vỡ cam kết "không khung".
 
-**Hộp thoại** (thêm lệnh, cài đặt) vẫn có nền riêng — chúng chỉ hiện tạm thời và cần đọc được, nên không áp dụng chế độ trong suốt cho chúng.
+**Hộp thoại** (thêm lệnh, cài đặt) vẫn có nền riêng — chúng chỉ hiện tạm thời và cần đọc được, nên không áp dụng chế độ trong suốt cho chúng. Lớp phủ mờ phía sau hộp thoại **cũng được giữ**: bản đầu để nó trong suốt hoàn toàn, và chữ của widget lọt qua tấm form, đè lên nhãn — ảnh chụp bắt được. "Chỉ chữ" nói về việc widget không có nền, không có nghĩa là hộp thoại phải khó đọc.
 
 ### Thanh tiêu đề tự ẩn
 
@@ -273,6 +311,7 @@ Bấm **"Dữ liệu trên máy"** ở chân widget để mở thư mục chứa
 - Sao lưu = copy file đó. Khôi phục = chép đè lại.
 - Tuỳ chỉnh giao diện nằm trong `settings` của cùng file đó: `theme`, `textColor`, `bgAlpha`, `halo`, `bounds`, `expandedHeight`, `chart`, `chartRange`, `widgetRole`, và cho chế độ ghim: `dockMode` (`float` / `edge` / `taskbar`), `dockX`, `dockWidth`, `collapseOnBlur`. Xoá các khoá này là về mặc định.
 - **Lịch sử biểu đồ** nằm ở khoá `history` của cùng file: mảng `{t, v}` (thời điểm, giá trị danh mục), tối đa 720 mẫu, lấy mẫu mỗi 5 giây. Đây là dữ liệu **chỉ trên máy**, không gửi đi đâu. Xoá khoá này là biểu đồ bắt đầu lại từ trống.
+- **Cảnh báo** nằm ở khoá `alerts`. Mỗi cảnh báo có `direction` (`above` / `below` / `touch`) và — chỉ với `touch` — `tolerance` (% mỗi bên). File của bản cũ (schema v2) được nâng lên v3 khi mở app: cảnh báo cũ giữ nguyên hướng và **không** bị gắn thêm `tolerance`.
 
 ---
 
@@ -294,14 +333,15 @@ Muốn tự kiểm chứng: bật Wireshark/Resource Monitor và xem tiến trì
 ## Kiểm thử
 
 ```bat
-npm test          :: 53 unit test (toán danh mục + feed + cảnh báo + hình học biểu đồ + vai trò cửa sổ)
+npm test          :: 82 unit test (toán danh mục + feed + cảnh báo + migration dữ liệu + hình học biểu đồ + vai trò cửa sổ)
 ```
 
 Test e2e chạy Electron thật (cần Linux + Xvfb, dùng trong CI):
 
 ```bash
-npm run test:e2e  # 137 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh báo, thu gọn, reload,
-                  # theme nền, màu chữ, độ đục, thanh tiêu đề tự ẩn, tay nắm resize,
+npm run test:e2e  # 153 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh báo (cả 3 kiểu, kể cả chạm mốc
+                  # từ cả hai hướng), thu gọn, reload, theme nền, màu chữ, độ đục,
+                  # thanh tiêu đề tự ẩn, tay nắm resize,
                   # 3 chế độ vị trí (kể cả dải nằm TRONG hình chữ nhật taskbar),
                   # biểu đồ (đường, vùng tô, chấm cuối, chú thích, khung thời gian, lưu sau reload)
 
@@ -343,7 +383,7 @@ crypto-widget/
 ├── src/
 │   ├── portfolio.js     # toán danh mục (thuần, không I/O)
 │   ├── feed.js          # Binance Futures WS + REST fallback
-│   ├── alerts.js        # engine cảnh báo (edge-triggered)
+│   ├── alerts.js        # engine cảnh báo (vượt lên / xuống dưới / chạm mốc)
 │   ├── store.js         # lưu JSON atomic + lịch sử biểu đồ
 │   └── window-role.js   # vai trò cửa sổ (thuần — unit test trực tiếp)
 ├── renderer/
@@ -360,10 +400,11 @@ crypto-widget/
 ### Kiểm thử chế độ vị trí và biểu đồ
 
 ```bash
-xvfb-run -a node test/e2e.js        # 137 assertion, gồm 20 cho chế độ ghim + 20 cho biểu đồ
+xvfb-run -a node test/e2e.js        # 153 assertion, gồm 20 cho chế độ ghim + 20 cho biểu đồ
 xvfb-run -a node test/window-role.e2e.js  # 13 assertion cho vai trò cửa sổ
 xvfb-run -a node test/dock-shots.js # ảnh chụp dải ghim → shots-dock/
 xvfb-run -a node test/shots-v6.js   # ảnh chụp biểu đồ + 3 chế độ vị trí → shots-v6/
+xvfb-run -a node test/shots-v8.js   # ảnh chụp form cảnh báo "chạm mốc" → shots-v8/
 xvfb-run -a node test/dock-measure.js # số đo hình học thật của dải
 ```
 
@@ -384,7 +425,11 @@ Riêng chế độ **Trong taskbar**, các assertion đọc **hình học cửa 
 - **Vì sao widget được "hiện lại" mỗi 2 giây?** Windows không bắn sự kiện nào khi taskbar đổi kích thước/cạnh, khi DPI đổi, hay khi `explorer.exe` khởi động lại — và nó có thể âm thầm gỡ cờ topmost. Vòng đo 2 giây so sánh "dấu vân tay" môi trường (hình chữ nhật taskbar + bounds + work area + scaleFactor) và áp lại z-order. Cờ `userHidden` phân biệt "Windows ẩn hộ" với "người dùng tự ẩn", nên menu khay vẫn ẩn được.
 - **Vì sao panel bung ra neo vào taskbar chứ không vào work area?** Khi taskbar tự ẩn, work area bằng cả màn hình, nên neo vào nó đặt đáy panel ở đáy màn hình — **đè lên taskbar**, đúng thứ chế độ này sinh ra để tránh. Test e2e bắt được (đáy panel 1024, đỉnh taskbar 976).
 - **Đường dẫn `/market`:** từ 2026 Binance định tuyến stream; `@markPrice` nằm trên `/market`, kết nối không có path sẽ **im lặng không nhận gì**. Code dùng `wss://fstream.binance.com/market/stream?streams=...`.
-- **Cảnh báo edge-triggered:** nếu giá đứng yên trên ngưỡng, bạn không bị spam thông báo. Phải quay lại phía bên kia rồi cắt qua lần nữa (và qua cooldown 5 phút).
+- **Cảnh báo edge-triggered:** với "vượt lên"/"xuống dưới", nếu giá đứng yên trên ngưỡng, bạn không bị spam thông báo. Phải quay lại phía bên kia rồi cắt qua lần nữa (và qua cooldown 5 phút).
+- **Vì sao "chạm mốc" cần dung sai?** So sánh bằng đúng bằng (`price === level`) trên một dòng tick gần như không bao giờ đúng — giá *bước qua* mốc chứ không *đậu* trên đó. Nên "chạm" bắn khi giá vào trong dải ± dung sai, **hoặc** khi khoảng `[giá trước, giá hiện tại]` quét qua dải đó. Trường hợp thứ hai bắt được cú nhảy: giá có thể đi từ 99 lên 101 mà không hề in ra 100, và đó vẫn là một lần chạm.
+- **Vì sao "chạm mốc" không bắn lại liên tục?** Sau khi bắn, nó **nằm im** cho tới khi giá rời khỏi dải một khoảng bằng 3 lần dung sai. Nếu không có ngưỡng trễ này, một mức giá rung lắc quanh mốc sẽ bắn mỗi tick. Cooldown 5 phút vẫn áp thêm lên trên.
+- **Vì sao ô dung sai bị ẩn với "vượt lên"/"xuống dưới"?** Hai kiểu đó không dùng dung sai. Ẩn hẳn (thay vì làm mờ) để giá trị còn sót lại từ lần nhập trước không thể lọt vào lệnh lưu.
+- **Vì sao overlay của "Chỉ chữ" vẫn có lớp mờ?** Bản đầu để overlay trong suốt hoàn toàn, và chữ của widget **lọt qua** tấm form, đè lên nhãn — ảnh chụp bắt được. "Chỉ chữ" nói về việc widget không có nền, không có nghĩa là hộp thoại phải khó đọc. Có assertion chặn nó quay lại.
 - **Bán quá số đang giữ:** bị chặn ở số lượng thực có, kèm cảnh báo vàng ở chân widget — không âm thầm tính sai.
 
 ---

@@ -90,12 +90,21 @@
  * so it is the one that stays. The absolute figure is still in the expanded
  * panel, one click away.
  *
- * The class is set from the renderer's own measured width (see app.js), not
- * from a media query: the window is resized by the main process, and a media
- * query on a 44px-tall window would be measuring the wrong thing.
+ * Implemented as a CONTAINER query, not a media query and not a JS class.
+ *
+ * A media query would measure the viewport, which is the wrong box: the strip
+ * IS the window, and the window is resized by the main process. A JS class
+ * would need a resize listener plus a call from renderSettings, i.e. two more
+ * places to keep in sync. `container-type: inline-size` makes the widget its
+ * own query container, so the rule below reacts to the strip's own width with
+ * no JavaScript at all.
  */
-.widget.is-docked.is-narrow .cv-pnl { display: none; }
-.widget.is-docked.is-narrow .cv-right { max-width: none; }
+.widget.is-docked { container-type: inline-size; }
+
+@container (max-width: 259px) {
+  .widget.is-docked .cv-pnl { display: none; }
+  .widget.is-docked .cv-right { max-width: none; }
+}
 
 /*
  * In dock mode the strip is the whole window, so the auto-hiding title bar

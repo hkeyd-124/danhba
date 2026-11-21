@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 /**
  * How many value samples the chart keeps.
@@ -115,10 +115,33 @@ class Store {
         .slice(-HISTORY_MAX)
       : [];
 
+    /**
+     * v2 -> v3: alerts gained the 'touch' direction and a `tolerance`.
+     *
+     * An alert written by v2 has only 'above'/'below' and no tolerance. It must
+     * keep behaving exactly as before, so the direction is passed through
+     * untouched when it is one of the two old values, and a tolerance is only
+     * attached to the new kind. Writing a tolerance onto an above/below alert
+     * would be harmless but misleading — the engine ignores it there.
+     */
+    const alerts = (Array.isArray(parsed.alerts) ? parsed.alerts : [])
+      .filter((a) => a && typeof a === 'object')
+      .map((a) => {
+        const direction = a.direction === 'below' || a.direction === 'touch' ? a.direction : 'above';
+        const out = { ...a, direction };
+        if (direction === 'touch') {
+          const t = Number(a.tolerance);
+          out.tolerance = Number.isFinite(t) && t >= 0 ? Math.min(50, t) : 0.1;
+        } else {
+          delete out.tolerance;
+        }
+        return out;
+      });
+
     return {
       version: SCHEMA_VERSION,
       trades: Array.isArray(parsed.trades) ? parsed.trades : [],
-      alerts: Array.isArray(parsed.alerts) ? parsed.alerts : [],
+      alerts,
       history,
       settings,
     };

@@ -10,7 +10,7 @@
     "icons": "node build/make-icons.js",
     "prestart": "node build/make-icons.js",
     "start": "electron .",
-    "test": "node --test --test-timeout=15000 test/portfolio.test.js test/feed.test.js test/chart.test.js test/window-role.test.js",
+    "test": "node --test --test-timeout=15000 test/portfolio.test.js test/feed.test.js test/alerts.test.js test/store.test.js test/chart.test.js test/window-role.test.js",
     "test:e2e": "xvfb-run -a node test/e2e.js",
     "predist": "node build/make-icons.js",
     "dist": "electron-builder --win --x64",

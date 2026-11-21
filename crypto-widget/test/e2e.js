@@ -322,6 +322,113 @@ async function findTarget(port, tries = 60) {
     `);
     check('crossing the threshold fires an alert', fired.toast.includes('75,000'), fired.toast);
 
+    // ---------- 6b. "cảnh báo giá đạt" (touch): direction must not matter
+    await cdp.eval(`document.getElementById('btnAddAlert').click(); return true;`);
+    await wait(250);
+
+    // The tolerance field must be hidden for the two directional kinds, and
+    // appear only when "Chạm mốc" is picked.
+    const tolHiddenForAbove = await cdp.eval(
+      `return document.getElementById('alertTolField').hidden;`
+    );
+    check('tolerance field is hidden for "vượt lên"', tolHiddenForAbove === true, `hidden=${tolHiddenForAbove}`);
+
+    await cdp.eval(`
+      document.querySelector('#alertDir .seg-btn[data-dir="touch"]').click();
+      return true;
+    `);
+    await wait(120);
+    const tolShownForTouch = await cdp.eval(`
+      return {
+        hidden: document.getElementById('alertTolField').hidden,
+        hint: document.getElementById('alertDirHint').textContent,
+        active: document.querySelector('#alertDir .seg-btn.is-active').dataset.dir,
+      };
+    `);
+    check('picking "Chạm mốc" reveals the tolerance field', tolShownForTouch.hidden === false, JSON.stringify(tolShownForTouch));
+    check('"Chạm mốc" becomes the active segment', tolShownForTouch.active === 'touch', tolShownForTouch.active);
+    check('the hint says direction does not matter', /tăng hay giảm/.test(tolShownForTouch.hint), tolShownForTouch.hint);
+
+    await cdp.eval(`
+      const set = (id, v) => {
+        const el = document.getElementById(id);
+        el.value = v;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+      set('alertSymbol', 'ETH');
+      set('alertPrice', '3000');
+      set('alertTolerance', '0.5');
+      return true;
+    `);
+    await cdp.eval(`document.getElementById('alertForm').requestSubmit(); return true;`);
+    await wait(500);
+
+    const touchRow = await cdp.eval(`
+      const rows = [...document.querySelectorAll('#alertList .alert')];
+      const r = rows.find((x) => x.textContent.includes('chạm mốc'));
+      return {
+        count: rows.length,
+        text: r ? r.textContent.replace(/\\s+/g, ' ').trim() : '',
+      };
+    `);
+    check('touch alert row created', touchRow.count === 2, `rows=${touchRow.count}`);
+    check('touch row is labelled "chạm mốc"', touchRow.text.includes('chạm mốc'), touchRow.text);
+    check('touch row shows its tolerance', touchRow.text.includes('±0.5%'), touchRow.text);
+
+    // Approach from BELOW: 2900 -> 3000. A directional "above" alert would also
+    // fire here, so the real test is the one after it.
+    mock.push('ETHUSDT', 2900);
+    await wait(400);
+    mock.push('ETHUSDT', 3000);
+    await wait(900);
+    const touchUp = await cdp.eval(
+      `return document.getElementById('toast').hidden ? '' : document.getElementById('toast').textContent;`
+    );
+    check('touch fires when the price rises into the level', touchUp.includes('3,000'), touchUp);
+
+    // Approach from ABOVE: 3100 -> 3000. This is the case the old kinds cannot
+    // express — "above" would not fire on a fall, "below" would not fire on a
+    // rise, and "touch" must fire on both.
+    mock.push('ETHUSDT', 3100);
+    await wait(400);
+    mock.push('ETHUSDT', 3000);
+    await wait(900);
+    const touchDown = await cdp.eval(
+      `return document.getElementById('toast').hidden ? '' : document.getElementById('toast').textContent;`
+    );
+    check('touch fires when the price FALLS into the level', touchDown.includes('3,000'), touchDown);
+
+    // Editing the touch alert must reopen with its tolerance intact.
+    await cdp.eval(`
+      const rows = [...document.querySelectorAll('#alertList .alert')];
+      const r = rows.find((x) => x.textContent.includes('chạm mốc'));
+      r.querySelector('[data-aedit]').click();
+      return true;
+    `);
+    await wait(300);
+    const reopened = await cdp.eval(`
+      return {
+        dir: document.querySelector('#alertDir .seg-btn.is-active').dataset.dir,
+        tol: document.getElementById('alertTolerance').value,
+        tolHidden: document.getElementById('alertTolField').hidden,
+      };
+    `);
+    check('editing a touch alert reopens on "Chạm mốc"', reopened.dir === 'touch', reopened.dir);
+    check('editing a touch alert keeps its tolerance', String(reopened.tol) === '0.5', `tol=${reopened.tol}`);
+    check('tolerance field is visible when editing a touch alert', reopened.tolHidden === false, `hidden=${reopened.tolHidden}`);
+
+    // Switching back to a directional kind must hide the field again, so a
+    // stale tolerance can never be saved onto an above/below alert.
+    await cdp.eval(`
+      document.querySelector('#alertDir .seg-btn[data-dir="above"]').click();
+      return true;
+    `);
+    await wait(120);
+    const backToAbove = await cdp.eval(`return document.getElementById('alertTolField').hidden;`);
+    check('switching back to "vượt lên" hides the tolerance field', backToAbove === true, `hidden=${backToAbove}`);
+    await cdp.eval(`document.querySelector('#alertModal [data-close]').click(); return true;`);
+    await wait(250);
+
     // ---------- 7. collapse / expand
     await cdp.eval(`document.getElementById('btnCollapse').click(); return true;`);
     await wait(500);
@@ -713,11 +820,17 @@ async function findTarget(port, tries = 60) {
       return {
         trades: document.querySelectorAll('#tradeList .trade').length,
         alerts: document.querySelectorAll('#alertList .alert').length,
+        touchText: (() => {
+          const r = [...document.querySelectorAll('#alertList .alert')]
+            .find((x) => x.textContent.includes('chạm mốc'));
+          return r ? r.textContent.replace(/\\s+/g, ' ').trim() : '';
+        })(),
         total: document.getElementById('totalValue').textContent,
       };
     `);
     check('trades survive a reload', afterReload.trades === 1, `trades=${afterReload.trades}`);
-    check('alerts survive a reload', afterReload.alerts === 1, `alerts=${afterReload.alerts}`);
+    check('alerts survive a reload', afterReload.alerts === 2, `alerts=${afterReload.alerts}`);
+    check('the touch alert survives a reload with its tolerance', afterReload.touchText.includes('±0.5%'), afterReload.touchText);
     check('value survives a reload', afterReload.total.includes('76,000'), afterReload.total);
 
     // ---------- 8b. appearance: themes, text colour, persistence
@@ -940,6 +1053,38 @@ async function findTarget(port, tries = 60) {
       bare.posBg === 'rgba(0, 0, 0, 0)' || bare.posBg === 'transparent', bare.posBg);
     check('the footer loses its fill',
       bare.footBg === 'rgba(0, 0, 0, 0)' || bare.footBg === 'transparent', bare.footBg);
+
+    /*
+     * The dialog scrim must survive this style. With a transparent overlay the
+     * widget's own text showed through the sheet and collided with the form's
+     * labels — a visual check caught it, and this keeps it from coming back.
+     * The widget itself stays surface-free; only the transient dialog is opaque.
+     */
+    await cdp.eval(`document.getElementById('btnAddAlert').click(); return true;`);
+    await wait(350);
+    const bareModal = await cdp.eval(`
+      const m = getComputedStyle(document.getElementById('alertModal'));
+      const s = getComputedStyle(document.querySelector('#alertModal .sheet'));
+      return { scrim: m.backgroundColor, sheetBg: s.backgroundColor };
+    `);
+    // Parse "rgba(r, g, b, a)" without a regex: the escaping inside a template
+    // literal is easy to get wrong, and a wrong pattern silently reads as
+    // alpha 0 — which is exactly the failure this check exists to catch.
+    const scrimAlpha = (() => {
+      const s = String(bareModal.scrim || '');
+      const open = s.indexOf('(');
+      const close = s.lastIndexOf(')');
+      if (open < 0 || close < 0) return 0;
+      const parts = s.slice(open + 1, close).split(',').map((x) => parseFloat(x));
+      if (parts.some((n) => !Number.isFinite(n))) return 0;
+      return parts.length === 4 ? parts[3] : 1;
+    })();
+    check('the dialog scrim stays opaque in the "Chỉ chữ" style',
+      scrimAlpha >= 0.5, `scrim=${bareModal.scrim} alpha=${scrimAlpha}`);
+    check('the dialog sheet keeps a real surface in the "Chỉ chữ" style',
+      bareModal.sheetBg !== 'rgba(0, 0, 0, 0)' && bareModal.sheetBg !== 'transparent', bareModal.sheetBg);
+    await cdp.eval(`document.querySelector('#alertModal [data-close]').click(); return true;`);
+    await wait(250);
     check('text carries a halo so it stays readable on any wallpaper',
       bare.heroShadow && bare.heroShadow !== 'none', bare.heroShadow);
     // The halo is a real text stroke painted behind the glyph, not a stack of

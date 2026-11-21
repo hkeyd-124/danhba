@@ -208,20 +208,18 @@ npm test          :: 102 unit test (toán danh mục + feed + cảnh báo + migr
 E2e cần Xvfb (Linux/CI) vì nó khởi động Electron thật:
 
 ```bash
-npm run test:e2e  # 171 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh báo (cả 3 kiểu, kể cả chạm mốc
+npm run test:e2e  # 153 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh báo (cả 3 kiểu, kể cả chạm mốc
                   # từ cả hai hướng), thu gọn, reload, theme nền, màu chữ, độ đục,
                   # thanh tiêu đề tự ẩn, tay nắm resize,
                   # 3 chế độ vị trí (kể cả dải nằm TRONG hình chữ nhật taskbar),
-                  # kéo giãn dải: lưu chiều rộng, giữ qua bung/thu, giữ qua reload,
-                  #   ngưỡng tối thiểu, bố cục hẹp không cắt cụt, căn dọc, padding đối xứng,
                   # biểu đồ (đường, vùng tô, chấm cuối, chú thích, khung thời gian, lưu sau reload)
+                  # Kéo giãn dải có bộ test riêng: test/strip.e2e.js
 ```
 
 ### Kiểm thử chế độ vị trí và biểu đồ
 
 ```bash
-xvfb-run -a node test/e2e.js        # 171 assertion, gồm 20 cho chế độ ghim + 20 cho biểu đồ
-                                    # + 14 cho kéo giãn dải trong taskbar
+xvfb-run -a node test/e2e.js        # 153 assertion, gồm 20 cho chế độ ghim + 20 cho biểu đồ
 xvfb-run -a node test/strip.e2e.js  # 20 assertion riêng cho kéo giãn dải (chạy độc lập được)
 xvfb-run -a node test/window-role.e2e.js  # 13 assertion cho vai trò cửa sổ
 xvfb-run -a node test/dock-shots.js # ảnh chụp dải ghim → shots-dock/

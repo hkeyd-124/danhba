@@ -27,8 +27,28 @@ function loadWith(data) {
   return store;
 }
 
-test('schema version is 3', () => {
-  assert.equal(SCHEMA_VERSION, 3);
+test('schema version is 4', () => {
+  assert.equal(SCHEMA_VERSION, 4);
+});
+
+test('a v3 file gets stripWidth: null, so the strip keeps its old width', () => {
+  // v3 had one width for both the panel and the strip. Leaving stripWidth null
+  // makes the strip fall back to dockWidth — exactly what v3 drew — so an
+  // existing install looks unchanged until the user drags the strip.
+  const store = loadWith({ version: 3, settings: { dockMode: 'taskbar', dockWidth: 420 } });
+  assert.equal(store.settings.stripWidth, null);
+  assert.equal(store.settings.dockWidth, 420);
+});
+
+test('a saved stripWidth survives a reload', () => {
+  const store = loadWith({ version: 4, settings: { dockMode: 'taskbar', stripWidth: 512 } });
+  assert.equal(store.settings.stripWidth, 512);
+});
+
+test('a junk stripWidth is discarded rather than trusted', () => {
+  assert.equal(loadWith({ version: 4, settings: { stripWidth: 'wide' } }).settings.stripWidth, null);
+  assert.equal(loadWith({ version: 4, settings: { stripWidth: -5 } }).settings.stripWidth, null);
+  assert.equal(loadWith({ version: 4, settings: { stripWidth: 0 } }).settings.stripWidth, null);
 });
 
 test('a v2 file keeps its above/below alerts untouched', () => {

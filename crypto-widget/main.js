@@ -41,6 +41,7 @@ const { PriceFeed } = require('./src/feed');
 const { AlertEngine } = require('./src/alerts');
 const { computePositions, normalizeSymbol, symbolsInUse } = require('./src/portfolio');
 const role = require('./src/window-role');
+const dockSize = require('./src/dock-size');
 
 const IS_TEST = process.env.CPW_TEST === '1';
 const EXPANDED = { width: 420, height: 660 };
@@ -281,10 +282,10 @@ function taskbarStripRect() {
   if (!horizontal) return null;
 
   const h = Math.max(28, Math.min(DOCK_COLLAPSED.height, tb.height - 4));
-  const w = Math.min(
-    Math.max(MIN_WIDTH_DOCKED, Number(store.settings.dockWidth) || DOCK_COLLAPSED.width),
-    tb.width,
-  );
+  // The strip has its OWN width setting. Reading `dockWidth` here is what made
+  // a dragged strip snap back: the panel's width is a different number, and
+  // resizing the panel would silently resize the strip too.
+  const w = Math.min(dockSize.stripWidth(store.settings), tb.width);
 
   let x = Number(store.settings.dockX);
   if (!Number.isFinite(x)) x = tb.x + tb.width - w - 12;
@@ -494,26 +495,35 @@ function createWindow() {
 
   win.on('closed', () => { win = null; });
 
-  const persistBounds = () => {
+  /**
+   * Persist a user move.
+   *
+   * `moved` also fires for our own `setBounds` calls, so a placement we just
+   * applied must not be written back as if the user had chosen it: that would
+   * turn a derived anchor into a fixed one. `boundsAppliedAt` is stamped by
+   * every placement, and anything within 400ms of it is ours.
+   */
+  win.on('moved', () => {
     if (!win || win.isDestroyed()) return;
-    const { x, y, width, height } = win.getBounds();
-    if (isDocked()) {
-      // In dock mode the vertical position is derived from the taskbar, so
-      // only the horizontal offset and the panel size are worth remembering.
-      //
-      // The x is only remembered when the user actually dragged the strip:
-      // `moved` also fires for our own placements, and writing dockX then would
-      // silently turn a derived anchor into a fixed one.
-      const userMoved = Date.now() - boundsAppliedAt > 400;
-      if (userMoved) store.patchSettings({ dockX: x });
-      if (!collapsed) store.patchSettings({ expandedHeight: height, dockWidth: width });
-      return;
-    }
-    if (collapsed) return;
-    store.patchSettings({ bounds: { x, y, width, height } });
-  };
-  win.on('moved', persistBounds);
-  win.on('resized', persistBounds);
+    if (Date.now() - boundsAppliedAt <= 400) return;
+    const patch = dockSize.movePatchFor({ docked: isDocked(), collapsed, ...win.getBounds() });
+    if (patch) store.patchSettings(patch);
+  });
+
+  /**
+   * Persist a user resize.
+   *
+   * This is the handler that was missing the docked-strip case: it used to
+   * bail out whenever the window was collapsed, so dragging the taskbar strip
+   * saved nothing and the next expand/collapse re-derived the old width.
+   * `sizePatchFor` now decides per case, including "docked and collapsed".
+   */
+  win.on('resized', () => {
+    if (!win || win.isDestroyed()) return;
+    if (Date.now() - boundsAppliedAt <= 400) return;
+    const patch = dockSize.sizePatchFor({ docked: isDocked(), collapsed, ...win.getBounds() });
+    if (patch) store.patchSettings(patch);
+  });
 }
 
 /**
@@ -704,9 +714,9 @@ function applyDockBounds() {
  * the renderer draws 8 invisible grab strips and tells us which one is held.
  * We then follow the OS cursor here — one timer, no IPC per mouse move.
  */
-function applyResize() {
+function applyResize(cursorOverride) {
   if (!win || win.isDestroyed() || !resizeState) return;
-  const cur = screen.getCursorScreenPoint();
+  const cur = cursorOverride || screen.getCursorScreenPoint();
   const dx = cur.x - resizeState.cursor.x;
   const dy = cur.y - resizeState.cursor.y;
   const s = resizeState.start;
@@ -720,7 +730,7 @@ function applyResize() {
   const minH = collapsed
     ? (isDocked() ? DOCK_COLLAPSED.height : COLLAPSED.height)
     : MIN_HEIGHT_EXPANDED;
-  const minW = collapsed && isDocked() ? MIN_WIDTH_DOCKED : MIN_WIDTH;
+  const minW = collapsed && isDocked() ? dockSize.MIN_STRIP_WIDTH : MIN_WIDTH;
 
   if (edge.includes('e')) width = s.width + dx;
   if (edge.includes('s')) height = s.height + dy;
@@ -758,14 +768,13 @@ function applyResize() {
 function stopResize(persist) {
   if (resizeTimer) { clearInterval(resizeTimer); resizeTimer = null; }
   resizeState = null;
-  if (persist && win && !win.isDestroyed() && !collapsed) {
-    const { x, y, width, height } = win.getBounds();
-    if (isDocked()) {
-      store.patchSettings({ dockX: x, dockWidth: width, expandedHeight: height });
-    } else {
-      store.patchSettings({ bounds: { x, y, width, height } });
-    }
-  }
+  if (!persist || !win || win.isDestroyed()) return;
+
+  // The authoritative save. `resized` also fires during the drag, but the
+  // final rectangle is only known here, and a drag that ends on a sub-pixel
+  // boundary must still be remembered exactly as the user left it.
+  const patch = dockSize.sizePatchFor({ docked: isDocked(), collapsed, ...win.getBounds() });
+  if (patch) store.patchSettings(patch);
 }
 
 // ---------------------------------------------------------------- tray
@@ -946,11 +955,21 @@ function registerIpc() {
       id: a.id || crypto.randomUUID(),
       symbol,
       price,
-      direction: a.direction === 'below' ? 'below' : 'above',
+      // 'touch' must survive the save. It used to be coerced to 'above' here,
+      // which silently turned every "chạm mốc" alert into a one-directional
+      // one: the renderer offered the kind, the engine understood it, and the
+      // IPC boundary threw it away. The e2e suite caught it.
+      direction: a.direction === 'below' || a.direction === 'touch' ? a.direction : 'above',
       note: String(a.note || '').slice(0, 120),
       enabled: a.enabled !== false,
       createdAt: a.createdAt || Date.now(),
     };
+    // A tolerance only means anything for 'touch'; attaching one to an
+    // above/below alert would be dead data that reads as if it did something.
+    if (alert.direction === 'touch') {
+      const t = Number(a.tolerance);
+      alert.tolerance = Number.isFinite(t) && t >= 0 ? Math.min(50, t) : 0.1;
+    }
     store.upsertAlert(alert);
     engine.setAlerts(store.alerts);
     engine.resetCooldown(alert.id);
@@ -1047,6 +1066,28 @@ function registerIpc() {
       win.emit('blur');
       return { ok: true, collapsed, guard: blurGuard };
     });
+    // Test-only: drive the REAL resize path with a synthetic cursor.
+    //
+    // The e2e suite runs under Xvfb, where there is no pointer to move and no
+    // xdotool to move it with, so a drag could only be faked by calling
+    // setBounds directly — which would skip applyResize, the clamping, and the
+    // persistence entirely, i.e. exactly the code under test. This runs the
+    // same function the 16ms timer runs, with the cursor supplied.
+    ipcMain.handle('test-resize', (_e, { edge, dx, dy }) => {
+      if (!win || win.isDestroyed()) return { ok: false };
+      stopResize(false);
+      const start = win.getBounds();
+      resizeState = {
+        edge: String(edge || 'e'),
+        start,
+        cursor: { x: start.x, y: start.y },
+      };
+      applyResize({ x: start.x + Number(dx || 0), y: start.y + Number(dy || 0) });
+      const after = win.getBounds();
+      stopResize(true);
+      return { ok: true, before: start, after };
+    });
+
     // Test-only: report the real window geometry, so placement can be asserted
     // against the taskbar rectangle instead of guessed from CSS.
     ipcMain.handle('test-geometry', () => {
@@ -1062,6 +1103,17 @@ function registerIpc() {
         visible: win.isVisible(),
         widgetRole: store.settings.widgetRole !== false,
         envKey: environmentKey(),
+        // The persisted settings, so a test can assert what was SAVED rather
+        // than only what the window currently looks like. `get-state` returns
+        // true and pushes the state over an event, which is not readable from
+        // an evaluate() call.
+        settings: {
+          dockMode: store.settings.dockMode,
+          dockX: store.settings.dockX,
+          dockWidth: store.settings.dockWidth,
+          stripWidth: store.settings.stripWidth,
+          expandedHeight: store.settings.expandedHeight,
+        },
       };
     });
   }
@@ -1083,7 +1135,14 @@ function registerIpc() {
       }
       case 'reset-size': {
         if (isDocked()) {
-          store.patchSettings({ dockWidth: EXPANDED.width, expandedHeight: EXPANDED.height });
+          // Reset BOTH sizes: the panel and the strip are separate settings
+          // now, and a reset that only touched one would leave the other at
+          // whatever the user had dragged it to.
+          store.patchSettings({
+            dockWidth: EXPANDED.width,
+            expandedHeight: EXPANDED.height,
+            stripWidth: dockSize.DEFAULT_STRIP_WIDTH,
+          });
           applyDockBounds();
           break;
         }

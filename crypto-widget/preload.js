@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('cpw', {
   // test-only; the main process registers these only when CPW_TEST=1
   testBlur: () => ipcRenderer.invoke('test-blur'),
   testGeometry: () => ipcRenderer.invoke('test-geometry'),
+  testResize: (opts) => ipcRenderer.invoke('test-resize', opts),
   resizeStart: (edge) => ipcRenderer.invoke('resize-start', edge),
   resizeEnd: () => ipcRenderer.invoke('resize-end'),
   openDataFolder: () => ipcRenderer.invoke('open-data-folder'),

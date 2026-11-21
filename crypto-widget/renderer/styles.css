@@ -722,7 +722,16 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 /* dialogs are transient and must stay usable, so they keep a real surface */
-.widget[data-theme="bare"] .modal { background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+/*
+ * The scrim is NOT optional in this style. With a fully transparent overlay the
+ * widget's own text showed through the sheet and collided with the form's
+ * labels — a visual check caught it. "Chỉ chữ" is about the widget having no
+ * surface, not about a dialog being unreadable, so the scrim stays.
+ */
+.widget[data-theme="bare"] .modal {
+  background: rgba(4, 7, 12, .62);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
 .widget[data-theme="bare"] .sheet {
   background: rgba(14, 20, 31, .97);
   border: 1px solid rgba(255, 255, 255, .12);

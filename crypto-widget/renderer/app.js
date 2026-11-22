@@ -12,6 +12,8 @@ const state = {
   totals: {},
   warnings: [],
   prices: {},
+  badges: {},
+  tones: null,
   history: [],
   feedStatus: 'idle',
   collapsed: false,
@@ -63,9 +65,79 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 function colorFor(sym) {
+  // The badge colour comes from the main process (src/coin-icon.js), so the
+  // brand table exists in exactly one place. The hash is only a fallback for a
+  // symbol that arrived before its badge did.
+  const b = state.badges && state.badges[sym];
+  if (b && b.color) return b.color;
   let h = 0;
   for (let i = 0; i < sym.length; i++) h = (h * 31 + sym.charCodeAt(i)) >>> 0;
   return COLORS[h % COLORS.length];
+}
+
+/**
+ * Coin badge markup.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the colours are NOT written as a `style="..."` attribute
+ *
+ * The page's CSP is `style-src 'self'`, which blocks every inline style
+ * attribute. That is deliberate — it is what stops injected markup from
+ * restyling the widget — but it means `style="--coin:#f7931a"` is silently
+ * dropped and the badge falls back to its CSS default.
+ *
+ * This was not theoretical: a probe against the running app showed the swatch
+ * buttons, the allocation bar and the per-coin bars had ALL been rendering
+ * with no colour at all, because every one of them used an inline style. The
+ * CSP was right; the markup was wrong.
+ *
+ * The fix is CSSOM: `el.style.setProperty()` is a script API, not an inline
+ * style attribute, so the CSP allows it. The markup therefore carries the
+ * values as data attributes and `paintStyles()` applies them after the HTML is
+ * in the DOM.
+ * ---------------------------------------------------------------------------
+ */
+function badgeHtml(symbol, size) {
+  const b = (state.badges && state.badges[symbol]) || null;
+  const color = b ? b.color : colorFor(symbol);
+  const ink = b ? b.ink : '#ffffff';
+  const glyph = b ? b.glyph : baseOf(symbol).slice(0, 4);
+  const cls = size === 'sm' ? 'coin coin-sm' : 'coin';
+  return `<span class="${cls}" data-coin="${esc(color)}" data-coin-ink="${esc(ink)}" aria-hidden="true">${esc(glyph)}</span>`;
+}
+
+/**
+ * Apply the data-attribute styles that the CSP forbids as inline attributes.
+ *
+ * Called once after each innerHTML write. It is a single pass over the
+ * container, and it is idempotent, so calling it more often than necessary
+ * costs nothing but a few property writes.
+ */
+function paintStyles(root) {
+  const scope = root || document;
+
+  scope.querySelectorAll('[data-coin]').forEach((el) => {
+    el.style.setProperty('--coin', el.dataset.coin);
+    el.style.setProperty('--coin-ink', el.dataset.coinInk || '#ffffff');
+  });
+
+  scope.querySelectorAll('[data-w]').forEach((el) => {
+    el.style.setProperty('width', `${el.dataset.w}%`);
+  });
+
+  scope.querySelectorAll('[data-bg]').forEach((el) => {
+    el.style.setProperty('background', el.dataset.bg);
+  });
+
+  // `data-fg` is the text colour, kept separate from `data-bg` because the
+  // coin symbol is drawn in its brand colour as TEXT, not as a fill.
+  scope.querySelectorAll('[data-fg]').forEach((el) => {
+    el.style.setProperty('color', el.dataset.fg);
+  });
+
+  scope.querySelectorAll('[data-c]').forEach((el) => {
+    el.style.setProperty('--c', el.dataset.c);
+  });
 }
 function toLocalInput(ts) {
   const d = new Date(ts);
@@ -89,10 +161,36 @@ function toast(msg) {
 }
 
 // ------------------------------------------------------------------ render
+/**
+ * The display record, always complete.
+ *
+ * `state.settings.display` comes from the main process already normalised, but
+ * the very first paint happens before the first state arrives, so this falls
+ * back to "everything on" rather than to `undefined` — which would make every
+ * `!== false` check pass by accident and then flip when the state landed.
+ */
+function display() {
+  const d = (state.settings && state.settings.display) || {};
+  return d;
+}
+function shows(key) {
+  return display()[key] !== false;
+}
+
 function render() {
   const t = state.totals || {};
   const pnl = Number(t.pnl) || 0;
   const pct = Number(t.pnlPct) || 0;
+
+  // ---- expanded panel: each block is shown or hidden on its own switch ----
+  $('heroLabel').hidden = !shows('total');
+  $('totalValue').hidden = !shows('total');
+  $('totalPnl').hidden = !shows('pnl');
+  $('totalPct').hidden = !shows('pct');
+  $('posCount').hidden = !shows('positions');
+  // The row itself has no reason to exist once all three of its children are
+  // gone: an empty flex row still takes its margin and leaves a gap.
+  $('heroRow').hidden = !shows('pnl') && !shows('pct') && !shows('positions');
 
   $('totalValue').textContent = `${fmtMoney(t.value)} USDT`;
   const pnlEl = $('totalPnl');
@@ -103,11 +201,15 @@ function render() {
   pctEl.className = `pill pill-ghost ${cls(pct)}`;
   $('posCount').textContent = t.openPositions ? `${t.openPositions} vị thế` : '';
 
+  // ---- collapsed strip: its own three switches ----
+  $('cvLeft').hidden = !shows('stripTotal');
   $('cvValue').textContent = `${fmtMoney(t.value)}`;
   const cvPnl = $('cvPnl');
+  cvPnl.hidden = !shows('stripPnl');
   cvPnl.textContent = fmtSigned(pnl);
   cvPnl.className = `cv-pnl ${cls(pnl)}`;
   const cvPct = $('cvPct');
+  cvPct.hidden = !shows('stripPct');
   cvPct.textContent = fmtPct(pct);
   cvPct.className = `cv-pct ${cls(pct)}`;
 
@@ -118,6 +220,10 @@ function render() {
   renderFeed();
   renderChart();
   renderSettings();
+
+  // The swatches live in the settings sheet, which is static markup, so their
+  // colours are painted once here rather than on every list render.
+  paintStyles(document);
 }
 
 function renderPositions() {
@@ -126,9 +232,15 @@ function renderPositions() {
   const alloc = $('allocBar');
   const positions = state.positions || [];
 
+  // The allocation bar and the list are separate switches: the bar is a
+  // one-line summary of the same data, and someone who only wants the bar
+  // should not have to keep the list open to get it.
+  alloc.hidden = !shows('alloc');
+  $('panel-positions').classList.toggle('no-list', !shows('list'));
+
   if (!positions.length) {
     list.innerHTML = '';
-    empty.hidden = false;
+    empty.hidden = !shows('list');
     alloc.innerHTML = '';
     return;
   }
@@ -136,17 +248,32 @@ function renderPositions() {
 
   alloc.innerHTML = positions
     .filter((p) => p.allocation > 0.01)
-    .map((p) => `<span style="width:${p.allocation.toFixed(2)}%;background:${colorFor(p.symbol)}" title="${esc(p.base)} ${p.allocation.toFixed(1)}%"></span>`)
+    .map((p) => `<span data-w="${p.allocation.toFixed(2)}" data-bg="${esc(colorFor(p.symbol))}" title="${esc(p.base)} ${p.allocation.toFixed(1)}%"></span>`)
     .join('');
 
+  if (!shows('list')) { list.innerHTML = ''; paintStyles(alloc); return; }
+
+  const withIcons = shows('icons');
   list.innerHTML = positions.map((p) => {
     const c = colorFor(p.symbol);
     const pnlCls = cls(p.unrealized);
-    const priceNote = p.hasPrice ? '' : ' <span class="warn" style="display:inline">chưa có giá</span>';
+    const priceNote = p.hasPrice ? '' : ' <span class="warn warn-inline">chưa có giá</span>';
+    /**
+     * The ticker appears exactly once.
+     *
+     * The badge already carries it, so drawing the symbol again next to the
+     * badge said "BTC BTC" — which is what the first version did, and it read
+     * as a rendering mistake. The badge is the label when icons are on; the
+     * text label is the fallback when they are off, so the row is never
+     * nameless.
+     */
+    const name = withIcons
+      ? badgeHtml(p.symbol)
+      : `<span class="pos-sym" data-fg="${esc(c)}">${esc(p.base)}</span>`;
     return `
       <div class="pos" data-symbol="${esc(p.symbol)}">
         <div class="pos-top">
-          <span class="pos-sym" style="color:${c}">${esc(p.base)}</span>
+          ${name}
           <span class="pos-qty">${fmtQty(p.qty)} · TB ${fmtPrice(p.avgCost)}</span>
         </div>
         <div class="pos-val">${fmtMoney(p.value)}</div>
@@ -155,9 +282,12 @@ function renderPositions() {
           <span>${p.allocation.toFixed(1)}%</span>
         </div>
         <div class="pos-pnl ${pnlCls}">${fmtSigned(p.unrealized)} (${fmtPct(p.pnlPct)})</div>
-        <div class="pos-bar"><i style="width:${Math.min(100, p.allocation).toFixed(2)}%;background:${c}"></i></div>
+        <div class="pos-bar"><i data-w="${Math.min(100, p.allocation).toFixed(2)}" data-bg="${esc(c)}"></i></div>
       </div>`;
   }).join('');
+
+  paintStyles(list);
+  paintStyles(alloc);
 }
 
 function renderTrades() {
@@ -179,7 +309,7 @@ function renderTrades() {
       <div class="trade" data-id="${esc(t.id)}">
         <span class="side ${side}">${side === 'buy' ? 'Mua' : 'Bán'}</span>
         <div class="trade-main">
-          <div class="trade-sym">${esc(baseOf(t.symbol))} <span class="muted" style="display:inline">${fmtQty(t.qty)} @ ${fmtPrice(t.price)}</span></div>
+          <div class="trade-sym">${esc(baseOf(t.symbol))} <span class="muted muted-inline">${fmtQty(t.qty)} @ ${fmtPrice(t.price)}</span></div>
           <div class="trade-meta">${fmtMoney(total)} USDT${Number(t.fee) > 0 ? ` · phí ${fmtMoney(t.fee, 4)}` : ''} · ${fmtTime(t.time)}</div>
         </div>
         <div class="trade-actions">
@@ -368,6 +498,7 @@ function renderSettings() {
   };
   $('dockHint').textContent = DOCK_HINT[state.dockMode] || DOCK_HINT.float;
 
+  syncDisplayChecks();
   applyLook(s);
 }
 
@@ -412,9 +543,24 @@ function applyLook(s) {
   const alpha = Number.isFinite(Number(s.bgAlpha)) ? Number(s.bgAlpha) : 1;
   w.style.setProperty('--bg-alpha', String(Math.min(1, Math.max(0, alpha))));
 
-  // Text colour drives --text; muted tones are derived so contrast stays sane.
+  /**
+   * Text colour, and everything derived from it.
+   *
+   * The old version set `--text` and left `--muted` at a fixed blue-grey, so
+   * the labels, hints, placeholders and the whole secondary layer kept a tone
+   * that no longer belonged to the chosen colour. The derived tones now come
+   * from the main process (src/text-color.js), which measures each one against
+   * the surface the current theme actually paints.
+   *
+   * `tones` is null only before the first state arrives; the fallbacks below
+   * are the same values the module would produce for the default colour, so
+   * the first paint is not visibly different from the second.
+   */
   const color = /^#[0-9a-f]{6}$/i.test(String(s.textColor || '')) ? s.textColor : '#e8eefc';
+  const tones = state.tones || null;
   w.style.setProperty('--text', color);
+  w.style.setProperty('--muted', tones ? tones.muted : '#9aabc6');
+  w.style.setProperty('--faint', tones ? tones.faint : '#55647d');
 
   // ---- "Chỉ chữ": the halo is the only thing standing between the text and
   // an arbitrary wallpaper, so it is derived from the text colour itself.
@@ -444,7 +590,7 @@ function applyLook(s) {
     ? 'rgba(0, 0, 0, .92)'
     : 'rgba(255, 255, 255, .92)');
 
-  w.style.setProperty('--halo-color', haloFor(color));
+  w.style.setProperty('--halo-color', tones ? tones.halo : haloFor(color));
   // The semantic colours are fixed, so their halos are too.
   w.style.setProperty('--halo-up', haloFor('#16c784'));
   w.style.setProperty('--halo-down', haloFor('#ea3943'));
@@ -469,6 +615,20 @@ function applyLook(s) {
     b.classList.toggle('is-active', b.dataset.color.toLowerCase() === color.toLowerCase());
   });
   $('colorPick').value = color;
+
+  /**
+   * The contrast readout.
+   *
+   * This is the part the old picker was missing: it let the user choose a
+   * colour that made the widget unreadable and said nothing at all. The number
+   * is measured against the surface the theme paints, and on 'bare' it says
+   * "unknown" rather than inventing a ratio against a wallpaper it cannot see.
+   */
+  const judge = (tones && tones.judge) || { level: 'unknown', message: '—', ratio: null };
+  const chip = $('contrastChip');
+  chip.dataset.level = judge.level;
+  chip.textContent = judge.ratio === null ? 'nền trong suốt' : `${judge.ratio}:1`;
+  $('contrastHint').textContent = judge.message;
 }
 
 $('btnLook').addEventListener('click', () => openModal('lookModal'));
@@ -509,6 +669,69 @@ $('colorGrid').addEventListener('click', (e) => {
 $('colorPick').addEventListener('change', (e) => {
   api.patchSettings({ textColor: e.target.value });
 });
+
+/**
+ * "Màu mặc định cho nền này".
+ *
+ * Not simply the default colour: on the light theme the default light text is
+ * invisible, so the reset has to know which way the surface goes. The value
+ * comes from the same module that judges contrast, so the two can never
+ * disagree about what "readable" means.
+ */
+$('btnResetColor').addEventListener('click', () => {
+  const theme = (state.settings && state.settings.theme) || 'solid';
+  const light = theme === 'light';
+  api.patchSettings({ textColor: light ? '#1f2937' : '#e8eefc' });
+  toast('Đã đặt lại màu chữ cho nền này');
+});
+
+/**
+ * The display checkboxes.
+ *
+ * One delegated listener for both groups: the boxes are plain checkboxes, so
+ * the only thing to do is send the one key that changed. The main process
+ * merges it into the stored record and pushes the state back, which is what
+ * repaints the widget — no local optimistic update, so the UI can never show a
+ * tick that was not actually saved.
+ */
+function wireDisplayChecks(containerId) {
+  const box = $(containerId);
+  if (!box) return;
+  box.addEventListener('change', (e) => {
+    const input = e.target.closest('input[data-display]');
+    if (!input) return;
+    api.patchSettings({ display: { [input.dataset.display]: input.checked } });
+  });
+}
+wireDisplayChecks('displayPanel');
+wireDisplayChecks('displayStrip');
+
+/**
+ * Reflect the stored display record in the checkboxes.
+ *
+ * Called from renderSettings, so the boxes always show what is actually saved
+ * — including after a reload, and including a key the user never touched
+ * (which is on by default).
+ */
+function syncDisplayChecks() {
+  document.querySelectorAll('input[data-display]').forEach((input) => {
+    input.checked = shows(input.dataset.display);
+  });
+
+  // A panel with nothing ticked is an empty box. Say so instead of leaving the
+  // user to wonder whether the app broke.
+  const anyPanel = ['total', 'pnl', 'pct', 'positions', 'list', 'alloc']
+    .some((k) => shows(k));
+  $('emptyNotice').hidden = anyPanel || (state.settings && state.settings.chart !== false);
+  $('displayPanelHint').textContent = anyPanel
+    ? 'Bỏ tích để ẩn. Ít nhất một mục nên được bật, nếu không bảng sẽ trống.'
+    : 'Đang tắt hết — bảng chi tiết sẽ trống. Tích lại ít nhất một mục.';
+
+  const anyStrip = ['stripTotal', 'stripPnl', 'stripPct'].some((k) => shows(k));
+  $('displayStripHint').textContent = anyStrip
+    ? 'Dải hẹp có thể tự ẩn bớt số cho vừa chỗ — đó là bố cục, không phải mất tuỳ chọn.'
+    : 'Đang tắt hết — dải trong taskbar sẽ trống. Tích lại ít nhất một mục.';
+}
 
 $('btnResetSize').addEventListener('click', () => {
   api.window('reset-size');

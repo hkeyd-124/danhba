@@ -8,31 +8,17 @@
 <link rel="stylesheet" href="styles.css" />
 <link rel="stylesheet" href="dock.css" />
 <link rel="stylesheet" href="chart.css" />
-<link rel="stylesheet" href="spark.css" />
+<link rel="stylesheet" href="candles.css" />
 </head>
 <body>
 <!--
-  Shared gradient definitions for the coin sparklines.
+  The shared sparkline gradients used to live here.
 
-  Defined ONCE here rather than inside each sparkline: an SVG gradient is
-  referenced by id, and 8 rows each carrying their own <defs> would mean 8
-  copies of the same two gradients and 8 ids to keep unique. Two ids, one
-  place, and every sparkline points at them.
-
-  `aria-hidden` and zero size: this element paints nothing itself.
+  They are gone with the line chart: a candlestick is a solid fill, not a
+  gradient, so `#sparkUp` / `#sparkDown` had no remaining referent. The
+  portfolio chart's own gradients are still defined inside its own <svg>, where
+  they are used.
 -->
-<svg class="spark-defs" aria-hidden="true" focusable="false">
-  <defs>
-    <linearGradient id="sparkUp" x1="0" y1="0" x2="0" y2="1">
-      <stop class="stop-up-a" offset="0%" />
-      <stop class="stop-up-b" offset="100%" />
-    </linearGradient>
-    <linearGradient id="sparkDown" x1="0" y1="0" x2="0" y2="1">
-      <stop class="stop-down-a" offset="0%" />
-      <stop class="stop-down-b" offset="100%" />
-    </linearGradient>
-  </defs>
-</svg>
 
 <div class="widget" id="widget" data-theme="solid">
 
@@ -327,6 +313,28 @@
       </div>
 
       <!--
+        ============ candlestick timeframe ============
+        One frame for every coin, not one per coin: the charts sit in a list and
+        are read as a column, so two rows on different frames would be comparing
+        different windows without saying so.
+
+        The buttons are `data-candle`, and the value is the exchange's own
+        interval token — `5m`, `1h`, `1d` — because that is what gets sent to
+        /fapi/v1/klines. A translated token would be a 400.
+      -->
+      <div class="field">
+        <span>Khung nến</span>
+        <div class="seg seg-5" id="candleSeg">
+          <button type="button" class="seg-btn" data-candle="5m">5m</button>
+          <button type="button" class="seg-btn" data-candle="15m">15m</button>
+          <button type="button" class="seg-btn" data-candle="1h">1h</button>
+          <button type="button" class="seg-btn" data-candle="4h">4h</button>
+          <button type="button" class="seg-btn" data-candle="1d">1d</button>
+        </div>
+        <em class="hint" id="candleHint">Mỗi nến là một khung. Thân nến là giá mở→đóng, râu nến là cao→thấp. Áp dụng cho cả bảng chi tiết và dải trong taskbar.</em>
+      </div>
+
+      <!--
         ============ which coins the strip follows ============
         A tick per held coin. The rows are built from `state.positions` rather
         than written here, because the coins change as trades are added — a
@@ -476,7 +484,7 @@
   <div class="grip grip-sw" data-edge="sw"></div>
 </div>
 <script src="chart.js"></script>
-<script src="sparkline.js"></script>
+<script src="candles.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

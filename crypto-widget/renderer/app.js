@@ -160,62 +160,96 @@ function paintStyles(root) {
 }
 
 /**
- * A coin's sparkline, as inline SVG.
+ * A coin's candlestick chart, as inline SVG.
  *
  * ---------------------------------------------------------------------------
  * Where it goes and why
  *
  * Between the ticker and the price — the empty middle of the row. That space
  * was dead: the name is left-aligned, the price is right-aligned, and nothing
- * used the gap. Putting the shape there means the row reads
+ * used the gap. Putting the chart there means the row reads
  * "which coin · how it moved · what it costs", left to right, with no extra
  * line of height.
  *
  * ---------------------------------------------------------------------------
+ * Why candles and not the line that was here before
+ *
+ * The line was built from candle CLOSES: one number per period, joined up. It
+ * answered "which way did it drift" and threw away the open, the high and the
+ * low — three quarters of what the exchange published. A candlestick keeps all
+ * four in the same box: the body is open→close, the wick is high→low, and the
+ * colour says which way the period closed.
+ *
+ * ---------------------------------------------------------------------------
  * Why the geometry is a separate module
  *
- * `sparkline.js` is pure (values in, path out) and unit-tested on the cases
- * that actually break a line: one value, a flat series, a missing series. This
- * function only measures the box and writes the result into the DOM.
+ * `candles.js` is pure (rows in, paths out) and unit-tested on the cases that
+ * actually break a candle chart: a flat series, a doji (open === close), a
+ * single candle, a high below its low. This function only measures the box and
+ * writes the result into the DOM.
  *
  * ---------------------------------------------------------------------------
  * Why the viewBox is fixed and `preserveAspectRatio="none"`
  *
- * The same markup is used in the 44px strip and in the panel, at two different
- * widths. A fixed viewBox with `none` lets one path stretch to either without
- * a re-render on resize, and `vector-effect: non-scaling-stroke` keeps the
- * line 1.5px instead of stretching it with the box.
+ * The same markup is used in the 13px strip and in the panel, at two different
+ * widths. A fixed viewBox with `none` lets one set of paths stretch to either
+ * without a re-render on resize. The bodies are FILLED, so stretching them is
+ * harmless; the wicks are stroked with `vector-effect: non-scaling-stroke`, so
+ * they stay 1px instead of thickening with the box.
  * ---------------------------------------------------------------------------
  *
  * @param {string} symbol  e.g. "LDOUSDT"
  * @param {{cls:string}} opts
  * @returns {string} SVG markup, or '' when there is nothing to draw
+ *
+ * NOTE the box keys are `width` / `height`, matching chart.js. They were `w` /
+ * `h` in the first version of this function, which `Candles.build` read as
+ * undefined and defaulted to 1 — so all 24 candles were laid out inside a 1x1
+ * unit box and the whole chart collapsed into a ~1px sliver on the left edge.
+ * The paths were well formed, which is why a "does a path exist" assertion
+ * passed; only a measurement caught it.
  */
-const SPARK_BOX = { w: 100, h: 30, padY: 3 };
+const CANDLE_BOX = { width: 100, height: 30, padY: 2, bodyRatio: 0.66 };
 
-function sparkHtml(symbol, opts) {
+/**
+ * How many candles each box can actually show.
+ *
+ * Measured, not guessed. The panel gives the chart 60px and the strip 76px, but
+ * the strip row is only 11px tall — and at 24 candles the strip's slot is 3.2px.
+ * Rendered in a real browser at 4x that blurs into a single jagged line: there
+ * is no room for a body AND a gap AND a wick in three pixels.
+ *
+ * So the strip merges its series down to 12. Merging (not truncating) keeps the
+ * full window and makes each candle a true OHLC roll-up of the ones it replaces
+ * — see `downsample` in candles.js. The panel has the height for all 24.
+ */
+const CANDLE_MAX_PANEL = 24;
+const CANDLE_MAX_STRIP = 12;
+
+function candleHtml(symbol, opts) {
   const o = opts || {};
   const entry = state.klines && state.klines[symbol];
-  if (!entry || !Array.isArray(entry.values) || entry.values.length < 2) return '';
+  if (!entry || !Array.isArray(entry.candles) || !entry.candles.length) return '';
 
-  const built = window.Spark.build(entry.values, {
-    width: SPARK_BOX.w,
-    height: SPARK_BOX.h,
-    padY: SPARK_BOX.padY,
-  });
+  const box = o.max ? { ...CANDLE_BOX, maxCandles: o.max } : CANDLE_BOX;
+  const built = window.Candles.build(entry.candles, box);
   if (built.empty) return '';
 
   const dir = built.direction;
-  const fill = dir === 'down' ? 'url(#sparkDown)' : dir === 'up' ? 'url(#sparkUp)' : 'none';
-  const cls = `spark is-${dir}${o.cls ? ` ${o.cls}` : ''}`;
+  const cls = `candles is-${dir}${o.cls ? ` ${o.cls}` : ''}`;
 
   /**
    * `aria-hidden` because the number beside it already states the change: a
    * screen reader announcing "graphic" adds nothing the row does not say.
+   *
+   * Four paths, not forty: every rising body in one, every falling body in
+   * another, and the same for the wicks. See the note in candles.js.
    */
-  return `<svg class="${cls}" viewBox="0 0 ${SPARK_BOX.w} ${SPARK_BOX.h}" preserveAspectRatio="none" aria-hidden="true" focusable="false">`
-    + `<path class="spark-area" d="${built.area}" fill="${fill}" />`
-    + `<path class="spark-line" d="${built.line}" />`
+  return `<svg class="${cls}" viewBox="0 0 ${CANDLE_BOX.w} ${CANDLE_BOX.h}" preserveAspectRatio="none" aria-hidden="true" focusable="false">`
+    + `<path class="cd-wick cd-wick-up" d="${built.wickPathUp}" />`
+    + `<path class="cd-wick cd-wick-down" d="${built.wickPathDown}" />`
+    + `<path class="cd-body cd-body-up" d="${built.bodyPathUp}" />`
+    + `<path class="cd-body cd-body-down" d="${built.bodyPathDown}" />`
     + '</svg>';
 }
 
@@ -362,11 +396,11 @@ function renderStripCoins() {
     const pnlCls = cls(p.unrealized);
     const price = p.hasPrice ? fmtPrice(p.mark) : '—';
     /**
-     * The sparkline sits between the ticker and the price — the empty middle
+     * The candlestick chart sits between the ticker and the price — the empty middle
      * of the row. It is omitted (not blanked) when the switch is off or the
      * series has not arrived, so the price keeps its right edge either way.
      */
-    const spark = shows('stripSpark') ? sparkHtml(p.symbol, { cls: 'spark-strip' }) : '';
+    const spark = shows('stripSpark') ? candleHtml(p.symbol, { cls: 'cd-strip', max: CANDLE_MAX_STRIP }) : '';
     return `
       <div class="cv-coin" data-symbol="${esc(p.symbol)}">
         ${badgeHtml(p.symbol, 'sm')}
@@ -425,11 +459,11 @@ function renderPositions() {
       ? badgeHtml(p.symbol)
       : `<span class="pos-sym" data-fg="${esc(c)}">${esc(p.base)}</span>`;
     /**
-     * The sparkline goes in the row's own middle: after the name, before the
+     * The candlestick chart goes in the row's own middle: after the name, before the
      * value. `.pos-top` is a flex row, so the SVG takes the leftover width and
      * the value column keeps its right edge.
      */
-    const spark = shows('spark') ? sparkHtml(p.symbol, { cls: 'spark-pos' }) : '';
+    const spark = shows('spark') ? candleHtml(p.symbol, { cls: 'cd-pos', max: CANDLE_MAX_PANEL }) : '';
     return `
       <div class="pos" data-symbol="${esc(p.symbol)}">
         <div class="pos-top">
@@ -603,7 +637,7 @@ function renderChart() {
   /**
    * The caption states the window and the change across it.
    *
-   * A bare sparkline cannot tell you whether it covers five minutes or five
+   * A bare chart cannot tell you whether it covers five minutes or five
    * hours, and a shape with no scale is decoration. One short line fixes that
    * without adding axes or a legend.
    */
@@ -648,6 +682,9 @@ function renderSettings() {
   });
   document.querySelectorAll('#rangeSeg .seg-btn').forEach((b) => {
     b.classList.toggle('is-active', Number(b.dataset.range) === Number(s.chartRange || 15));
+  });
+  document.querySelectorAll('#candleSeg .seg-btn').forEach((b) => {
+    b.classList.toggle('is-active', b.dataset.candle === (s.candleInterval || '15m'));
   });
 
   // The hint has to describe the mode that is actually selected, or it tells
@@ -776,6 +813,30 @@ function applyLook(s) {
     b.classList.toggle('is-active', b.dataset.color.toLowerCase() === color.toLowerCase());
   });
   $('colorPick').value = color;
+
+  /**
+   * The custom swatch shows the colour actually in use.
+   *
+   * It used to be a fixed rainbow gradient, which meant that after picking a
+   * custom colour NOTHING in the grid was marked as active: the eight presets
+   * did not match, and the custom swatch was still a rainbow. The user could
+   * not see which colour the widget was using, and the only way to find out was
+   * to open the OS colour dialog.
+   *
+   * So when the current colour is not one of the presets, the custom swatch is
+   * painted with it and marked active. When it IS a preset, the rainbow comes
+   * back — it is then a button that means "pick something else", which is
+   * exactly what it should look like.
+   */
+  const custom = document.querySelector('.swatch-custom');
+  if (custom) {
+    const isPreset = [...document.querySelectorAll('.swatch[data-color]')]
+      .some((b) => b.dataset.color.toLowerCase() === color.toLowerCase());
+    custom.classList.toggle('is-active', !isPreset);
+    custom.classList.toggle('is-custom', !isPreset);
+    if (isPreset) custom.style.removeProperty('--c');
+    else custom.style.setProperty('--c', color);
+  }
 
   /**
    * The contrast readout.
@@ -1413,6 +1474,20 @@ $('rangeSeg').addEventListener('click', (e) => {
   if (!b) return;
   api.patchSettings({ chartRange: Number(b.dataset.range) });
 });
+/**
+ * The candlestick frame.
+ *
+ * The main process switches the cache, refetches and pushes the new series, so
+ * there is no local optimistic update here: the buttons are repainted from the
+ * stored setting when the state comes back. That is the same rule the display
+ * checkboxes follow, and it means a rejected patch cannot leave a button
+ * showing a frame the app is not actually drawing.
+ */
+$('candleSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('.seg-btn');
+  if (!b) return;
+  api.patchSettings({ candleInterval: b.dataset.candle });
+});
 $('btnTestAlert').addEventListener('click', () => { api.testAlert(); toast('Đã gửi thông báo thử'); });
 $('btnSound').addEventListener('click', () => {
   api.patchSettings({ sound: state.settings.sound === false });
@@ -1422,6 +1497,16 @@ $('btnData').addEventListener('click', () => api.openDataFolder());
 // ------------------------------------------------------------------ IPC wiring
 api.onState((s) => {
   Object.assign(state, s);
+  /**
+   * `klines` arrives in the same `{interval, series}` shape as the dedicated
+   * channel, so it is unwrapped here too. Without this the first paint would
+   * read `state.klines[symbol]` off the envelope and find nothing, and every
+   * chart would stay blank until the next 60s refresh — the exact "empty on
+   * launch" bug the candle fetch exists to prevent.
+   */
+  const k = s && s.klines;
+  state.klines = (k && k.series) || {};
+  state.klineInterval = (k && k.interval) || state.klineInterval;
   /**
    * The main process has confirmed the selection, so the local mirror is no
    * longer needed. Clearing it here — rather than after a timeout — means the
@@ -1478,12 +1563,20 @@ api.onHistory((h) => {
 /**
  * Candle history arrived (or was refreshed).
  *
- * Only the two lists that draw a sparkline are repainted, not the whole
+ * Only the two lists that draw a candlestick chart are repainted, not the whole
  * widget: this fires on a 60s timer, and a full render would rebuild the
  * trade list and the settings sheet for a change that touches neither.
  */
 api.onKlines((k) => {
-  state.klines = k || {};
+  /**
+   * The payload is `{interval, series}`.
+   *
+   * `series` is keyed by symbol and holds only the ACTIVE frame, so the
+   * renderer never has to know which frame it is looking at to find a chart.
+   * The interval travels alongside it for the settings sheet's label.
+   */
+  state.klines = (k && k.series) || {};
+  state.klineInterval = (k && k.interval) || state.klineInterval;
   renderStripCoins();
   renderPositions();
 });

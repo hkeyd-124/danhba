@@ -15,6 +15,7 @@ Giá lấy trực tiếp từ **Binance USDⓈ-M Futures**. Toàn bộ dữ li�
 | **Vai trò tiện ích** | Không chiếm chỗ trên taskbar, **không hiện trong Alt+Tab**, luôn nổi trên app khác — nên chuyển sang app khác widget vẫn nằm đó. Xem mục *Vai trò cửa sổ*. |
 | **Ba chế độ vị trí** | Cửa sổ nổi, dải sát taskbar, và **dải nằm trong thanh taskbar** (cùng hàng với các icon). Bấm vào để bung ra, bấm ra ngoài để thu lại. Xem mục dưới. |
 | **Biểu đồ giá trị** | Đường giá trị danh mục theo thời gian (5 phút / 15 phút / 1 giờ), lấy mẫu mỗi 5 giây, lưu trên máy. Không trục, không lưới — chỉ hình dáng và mức thay đổi. |
+| **Biểu đồ nến từng coin** | Mỗi coin có một **sparkline lấy từ nến Binance Futures** (`/fapi/v1/klines`, 15m × 48 nến = 12 giờ). Có **ngay khi mở app** — không phải chờ giá sống tích lũy. Hiện ở **cả hai chỗ**: danh sách chi tiết và dải trong taskbar. Xanh khi tăng, đỏ khi giảm, xám khi đứng giá. Tắt/bật riêng cho từng chỗ. |
 | **Giá thời gian thực** | WebSocket `markPrice@1s` của Binance Futures, có REST fallback khi socket rớt. Tự kết nối lại với backoff. |
 | **Nhập tay** | Thêm / sửa / xoá lệnh mua–bán: đồng coin, giá vào, số lượng, phí, thời điểm, ghi chú. |
 | **Tính toán** | Giá vốn bình quân gia quyền (phí mua gộp vào giá vốn, phí bán trừ vào lãi thực hiện), P&L thực hiện + chưa thực hiện, % phân bổ danh mục. |
@@ -25,7 +26,7 @@ Giá lấy trực tiếp từ **Binance USDⓈ-M Futures**. Toàn bộ dữ li�
 | **Chế độ "Chỉ chữ"** | Không nền, không viền, không bóng đổ — chỉ còn chữ, nhìn thẳng ra desktop. Chữ có viền tương phản tự đổi theo màu chữ nên vẫn đọc rõ trên mọi hình nền. |
 | **Thanh tiêu đề tự ẩn** | Chỉ hiện khi rê chuột vào mép trên. Bình thường widget không có thanh tiêu đề — tối giản tối đa. |
 | **Kéo giãn cửa sổ** | Kéo 8 cạnh/góc để đổi kích thước, có nút "Về mặc định". Kích thước được nhớ. |
-| **Riêng tư** | Không tài khoản, không API key, không Firestore, không telemetry. Chỉ một kết nối ra ngoài duy nhất: Binance Futures. |
+| **Riêng tư** | Không tài khoản, không API key, không Firestore, không telemetry. Chỉ một kết nối ra ngoài duy nhất: Binance Futures (giá + nến, cùng một host). |
 
 ---
 
@@ -107,13 +108,43 @@ Bấm **⚙** → mục **Hiển thị**. Mỗi ô là một công tắc độc 
 | **Tổng giá trị** | Con số lớn ở dòng đầu |
 | **Lãi/lỗ** | Số P&L tuyệt đối |
 | **Phần trăm** | % lãi/lỗ |
-| **Theo dõi từng coin trong dải** | Mỗi coin được tích thêm **một dòng riêng**: logo + mã + giá + % |
+| **Biểu đồ nến** | Sparkline từ nến, ở dòng tổng |
+| **Theo dõi từng coin trong dải** | Mỗi coin được tích thêm **một dòng riêng**: logo + mã + **sparkline** + giá + % |
+
+Và trong nhóm **Danh sách chi tiết**:
+
+| Công tắc | Hiện gì |
+|---|---|
+| **Icon coin** | Logo thật của từng coin |
+| **Biểu đồ nến** | Sparkline từ nến, trong mỗi dòng coin |
+
+Hai công tắc `Biểu đồ nến` là **độc lập với nhau**: tắt sparkline trong dải thì panel vẫn còn, và ngược lại.
 
 Danh sách coin để tích được **sinh từ chính danh mục của bạn** — mua coin mới thì nó tự xuất hiện trong danh sách, không phải chờ bản cập nhật. Mỗi dòng trong danh sách có **logo thật của coin** bên cạnh ô tích, nên nhận ra coin ngay thay vì phải đọc từng mã. Bán hết một coin thì dòng của nó tự biến mất khỏi dải (không để lại dòng `0.00` vô nghĩa), nhưng **ô tích vẫn được nhớ** — mua lại là dòng hiện lại ngay.
 
 > **Dải trong taskbar chỉ đủ chỗ cho vài dòng.** Dải nằm *bên trong* hình chữ nhật của taskbar, nên chiều cao bị chặn bởi taskbar: taskbar 48px cho khoảng **2 dòng coin** cộng dòng tổng. Tích nhiều hơn thì phần dư bị cắt — đó là giới hạn vật lý, không phải lỗi. Muốn xem nhiều coin cùng lúc thì dùng chế độ **Cửa sổ nổi** hoặc **Sát taskbar**, ở đó dải không bị chặn chiều cao.
 
 > **Vì sao các dòng sát nhau?** Dòng coin cao **13px** (chữ 9.5–10px), không phải 18–20px như danh sách thường. Đây là mức sát nhất mà chữ vẫn không chạm dòng kế: 13px cho chữ 10px còn 3px khoảng thở, đủ để phần dưới của chữ không chạm phần trên của dòng sau. Cao hơn thì dòng thứ ba bị cắt giữa chữ — tệ hơn là không hiện.
+
+### Biểu đồ nến từng coin
+
+Mỗi coin có một **sparkline** — đường nhỏ nằm ở **khoảng trống giữa tên coin và giá**. Trước đây chỗ đó là khoảng chết: tên căn trái, giá căn phải, không gì dùng phần giữa. Đặt hình vào đó thì dòng đọc thành *coin nào · đi thế nào · giá bao nhiêu*, trái sang phải, mà **không thêm một dòng chiều cao nào**.
+
+| | |
+|---|---|
+| Nguồn | `fapi.binance.com/fapi/v1/klines` — **cùng host** với giá đang dùng |
+| Khung nến | **15m × 48 nến = 12 giờ** |
+| Tần suất làm mới | **60 giây** (bằng một chu kỳ nến; nhanh hơn thì chỉ tải lại đúng dữ liệu cũ) |
+| Hiện ở đâu | **Cả hai**: dòng coin trong dải taskbar (76×11) và danh sách chi tiết (60×16) |
+| Màu | Xanh khi cả khung tăng, đỏ khi giảm, xám khi đứng giá — cùng ngôn ngữ với P&L |
+
+**Vì sao lấy nến thay vì dùng giá sống?** Trước đây sparkline được vẽ từ giá app **tự thu trong phiên chạy**, nên lúc mới mở app đường còn trống, và tắt app là mất hình. `/klines` trả lời đúng câu hỏi mà biểu đồ đang hỏi — *“trước khi tôi mở app thì nó đã đi thế nào”* — nên đường có sẵn từ lần vẽ đầu, và luôn phủ đúng 12 giờ thay vì phụ thuộc app đã chạy bao lâu.
+
+**Vì sao không lưu nến xuống đĩa?** Nến là hình ảnh của thị trường, không phải dữ liệu của bạn: nó cũ ngay khi được ghi, và một file nữa trên đĩa là thêm một thứ phải migration. Bộ nhớ đệm nằm trong RAM, TTL 60 giây. Khởi động nguội thì tải lại — mỗi coin đang giữ một request.
+
+**Vì sao sparkline không chiếm hết khoảng trống?** Bản đầu để `flex: 1 1 auto`, và đo ra **121px** trong panel rộng 300px. Nó vừa, nhưng át cả dòng: biểu đồ thành thứ to nhất trên một dòng mà nhân vật chính là đồng coin. Giờ là **60px** trong panel và **76px** trong dải, căn giữa khoảng trống — đọc như một hình bên cạnh tên, đúng như ảnh tham chiếu. Đo lại: sparkline kết thúc **23–40px trước** chữ số lượng, không đè lên gì.
+
+> **Vì sao sparkline không dùng màu chữ bạn chọn?** Vì nó không phải chữ. Xanh/đỏ ở đây mang nghĩa *tăng/giảm*, giống hệt con số P&L bên cạnh — đổi nó theo màu chữ sẽ làm mất nghĩa đó. Trên nền **Chỉ chữ** thì đường được viền bằng quầng, giống chữ, nên vẫn đọc được trên hình nền sáng.
 
 ### Logo coin
 
@@ -181,7 +212,7 @@ Kéo mép trái/phải của dải để đổi chiều rộng. Chiều rộng �
 | Dưới 260px | Dải **ẩn số P&L tuyệt đối**, chỉ giữ phần trăm (xem bên dưới) |
 | Về mặc định | **⚙ → Kích thước → Về mặc định** đặt lại **cả** panel và dải |
 
-> **Vì sao dưới 260px lại ẩn số P&L?** Đo thật: ở 250px số P&L bị cắt thành `+4,...` — dấu ba chấm giữa một con số, vừa trông như lỗi vẽ vừa vô nghĩa. Ở 260px thì vừa. Nên dưới ngưỡng đó dải bỏ số tuyệt đối và giữ `+7.69%`, thứ vẫn tự nói được điều gì đó. Số tuyệt đối vẫn nằm trong panel, cách một cú bấm.
+> **Vì sao dưới 260px lại ẩn số P&L?** Đo thật: ở 250px số P&L bị cắt thành `+4,...` — dấu ba chấm giữa một con số, vừa trông như lỗi vẽ vừa vô nghĩa. Ở 260px thì vừa. Nên dưới ngưỡng đó dải bỏ số tuyệt đối và giữ `+7.69%`, thứ vẫn tự nó nói được điều gì đó. Số tuyệt đối vẫn nằm trong panel, cách một cú bấm.
 
 > **Vì sao dải và panel có chiều rộng riêng?** Trước đây cả hai dùng chung một số, nên kéo panel làm dải giãn theo, và tệ hơn: kéo dải **không được lưu** (code cũ bỏ qua mọi thay đổi khi đang thu gọn), nên lần bung/thu sau dải nhảy về kích thước cũ. Đó chính là lỗi đã sửa ở bản này.
 
@@ -266,6 +297,7 @@ Ghi file theo kiểu **atomic** (ghi file tạm rồi rename), nên mất điệ
 | Renderer | `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`. Không có `fetch`, không có `WebSocket` — mọi giá đi qua IPC. |
 | Điều hướng | `will-navigate` chặn, `setWindowOpenHandler` từ chối, `will-attach-webview` chặn, mọi permission request bị từ chối. |
 | Kết nối ra ngoài | **Duy nhất** `fapi.binance.com` / `fstream.binance.com` (và `wss://fstream.binance.com`). Không analytics, không crash report, không update check. |
+| Nến | Lấy từ **cùng host** `fapi.binance.com` (`/fapi/v1/klines`) — không thêm dịch vụ nào. Dữ liệu nến **chỉ nằm trong RAM**, TTL 60 giây, **không ghi xuống đĩa**. |
 | Logo coin | **Đóng gói sẵn trong app** dưới dạng data URI — **không tải từ CDN lúc chạy**. CSP `img-src 'self' data:` chỉ cho phép ảnh cùng gốc hoặc data URI, nên kể cả có ai chèn thẻ `<img>` trỏ ra ngoài thì trình duyệt cũng chặn. |
 | Dữ liệu | Chỉ một file JSON trên máy. Không upload, không đồng bộ, không tài khoản. |
 
@@ -274,7 +306,7 @@ Ghi file theo kiểu **atomic** (ghi file tạm rồi rename), nên mất điệ
 ## Kiểm thử
 
 ```bat
-npm test          :: 163 unit test (toán danh mục + feed + cảnh báo + migration dữ liệu + hình học biểu đồ + vai trò cửa sổ + kích thước dải ghim + chọn coin theo dõi + logo coin + tương phản màu chữ)
+npm test          :: 192 unit test (toán danh mục + feed + cảnh báo + migration dữ liệu + hình học biểu đồ + vai trò cửa sổ + kích thước dải ghim + chọn coin theo dõi + logo coin + tương phản màu chữ + nến Binance + hình học sparkline)
 ```
 
 E2e cần Xvfb (Linux/CI) vì nó khởi động Electron thật:
@@ -292,6 +324,7 @@ npm run test:e2e  # 153 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh b�
 
 ```bash
 xvfb-run -a node test/e2e.js        # 154 assertion, gồm 20 cho chế độ ghim + 20 cho biểu đồ
+xvfb-run -a node test/spark.e2e.js  # 31 assertion cho sparkline nến: có ở CẢ HAI chỗ, đúng vị trí, 3 hướng màu, 2 công tắc độc lập, sống qua reload
 xvfb-run -a node test/strip-coins.e2e.js  # 27 assertion cho dòng coin trong dải + logo thật + tương phản
 xvfb-run -a node test/strip.e2e.js  # 20 assertion riêng cho kéo giãn dải (chạy độc lập được)
 xvfb-run -a node test/window-role.e2e.js  # 13 assertion cho vai trò cửa sổ
@@ -300,6 +333,7 @@ xvfb-run -a node test/shots-v6.js   # ảnh chụp biểu đồ + 3 chế độ 
 xvfb-run -a node test/shots-v8.js   # ảnh chụp form cảnh báo "chạm mốc" → shots-v8/
 xvfb-run -a node test/shots-v9.js   # ảnh chụp dải ở 3 chiều rộng + mức tối thiểu → shots-v9/
 xvfb-run -a node test/shots-v10.js  # ảnh chụp bảng chọn coin (có logo), dải có dòng LDO/SUI, ô màu chữ → shots-v10/
+xvfb-run -a node test/shots-spark.js # ảnh chụp sparkline nến: panel, dải, nền Chỉ chữ, theme Sáng → shots-spark/
 xvfb-run -a node test/measure-v9.js # số đo thật của dải ở 7 chiều rộng (căn dọc, padding, cắt cụt)
 xvfb-run -a node test/dock-measure.js # số đo hình học thật của dải
 ```
@@ -316,7 +350,8 @@ crypto-widget/
 │   ├── portfolio.js     # toán danh mục (thuần — unit test trực tiếp)
 │   ├── feed.js          # WebSocket + REST fallback
 │   ├── alerts.js        # engine cảnh báo (thuần)
-│   ├── chart.js         # hình học biểu đồ (thuần)
+│   ├── chart.js         # hình học biểu đồ giá trị (thuần)
+│   ├── klines.js         # tải nến Binance + cache TTL 60s (thuần)
 │   ├── store.js         # lưu JSON atomic + lịch sử biểu đồ
 │   ├── dock-size.js     # kích thước dải ghim (thuần — unit test trực tiếp)
 │   ├── display.js       # công tắc hiển thị + chọn coin theo dõi (thuần)
@@ -329,6 +364,8 @@ crypto-widget/
 │   ├── index.html
 │   ├── styles.css
 │   ├── dock.css         # chế độ ghim + trong taskbar
+│   ├── spark.css        # sparkline nến (panel + dải + nền Chỉ chữ)
+│   ├── sparkline.js     # hình học sparkline (thuần — unit test trực tiếp)
 │   ├── app.js
 │   └── assets/coins/    # CREDITS.md — nguồn và giấy phép logo
 ├── build/
@@ -343,6 +380,15 @@ crypto-widget/
 
 - **Vì sao kéo dải bị mất kích thước?** Hai lỗi chồng lên nhau. (1) Handler `resized` có điều kiện `!collapsed`, mà dải trong taskbar **luôn** ở trạng thái thu gọn — nên kéo dải xong không lưu gì cả. (2) Dải và panel dùng chung một số `dockWidth`, nên kéo panel cũng làm dải giãn theo. Giờ dải có `stripWidth` riêng, và `src/dock-size.js` quyết định từng trường hợp (nổi/thu gọn, ghim/thu gọn) nên trường hợp "ghim + thu gọn" được lưu đúng. Có 17 unit test + **20 assertion e2e riêng** (`test/strip.e2e.js`); chèn lại điều kiện cũ vào code thì 3 assertion fail ngay (`expected 540, got 420`) — đúng triệu chứng đã báo.
 - **Vì sao dưới 260px dải ẩn số P&L?** Đo thật ở 7 chiều rộng (`test/measure-v9.js`): 250px thì P&L bị cắt thành `+4,...`, 260px thì vừa. Dấu ba chấm giữa một con số vừa trông như lỗi vẽ vừa vô nghĩa, nên dưới ngưỡng đó dải bỏ số tuyệt đối và giữ phần trăm. Ngưỡng là một **container query** trong `renderer/dock.css` (`@container (max-width: 259px)`), không phải media query — media query đo viewport, mà ở đây chính dải LÀ cửa sổ và cửa sổ do main process đổi kích thước. Cũng không dùng class JS: container query tự phản ứng, không cần thêm chỗ nào phải đồng bộ.
+- **Vì sao nến không lưu xuống đĩa, mà lịch sử biểu đồ thì lưu?** Hai thứ khác bản chất. Lịch sử biểu đồ là **dữ liệu của bạn** — không nguồn nào khác có nó, nên mất là mất thật. Nến là **hình ảnh của thị trường** — Binance luôn có sẵn, và bản trên đĩa cũ ngay khi được ghi. Nên nến chỉ nằm trong RAM với TTL 60 giây; khởi động nguội tải lại một request cho mỗi coin đang giữ. Đổi lại: không thêm file phải migration, và không có nguy cơ một file nến cũ bị hiển thị như thể đang mới.
+- **Vì sao sparkline tải nến ngay từ lần vẽ đầu?** Vì bản trước vẽ từ giá app **tự thu trong phiên chạy**: mới mở app thì đường trống, và phải chờ vài phút mới có hình. `/klines` trả về sẵn 12 giờ lịch sử nên lần vẽ đầu đã có đường hoàn chỉnh, và độ dài khung không còn phụ thuộc app đã chạy bao lâu.
+- **Vì sao sparkline không đọc `--text`?** Vì nó không phải chữ. Xanh/đỏ ở đây là **ngữ nghĩa tăng/giảm**, giống hệt con số P&L cùng dòng — cho nó chạy theo màu chữ người dùng chọn sẽ làm mất chính thông tin mà nó mang. Trên nền **Chỉ chữ**, đường được viền bằng `drop-shadow` màu quầng (giống chữ), nên vẫn tách được khỏi hình nền.
+- **Vì sao màu cảnh báo cần biến riêng `--warn`?** Nó từng viết cứng `#f0b429` ở ba chỗ (`.warn`, `.warn-inline`, chip tương phản). Trên theme tối màu đó đạt 10.3:1, tốt; trên theme Sáng chỉ **1.74:1** so với `#f4f7fc` — dòng cảnh báo gần như vô hình. Màu nào phải đổi theo nền thì thuộc về một biến, cạnh `--up` và `--down` vốn đã làm vậy. Theme Sáng dùng `#8a5a00` (5.6:1 trên nền, 6.1:1 trên thẻ trắng).
+- **Vì sao `sparkline.js` tách khỏi `chart.js`?** `chart.js` vẽ giá trị danh mục theo **thời gian**: trục x là timestamp và nó lọc theo khung cuộn. Sparkline coin là thứ khác — trục x chỉ là "nến 1..N", chuỗi đã đúng khung người dùng chọn, và hộp là 40×14 chứ không phải 100×34. Gộp cả hai vào một hàm thì hoặc sparkline thừa hưởng bộ lọc thời gian nó không cần, hoặc `chart.js` phải mọc thêm cờ chế độ. Hai hàm thuần nhỏ dễ đọc hơn, và mỗi cái được test riêng.
+- **Vì sao viewBox cố định mà `preserveAspectRatio="none"`?** Cùng một markup dùng ở dải 44px và ở panel, hai chiều rộng khác nhau. ViewBox cố định + `none` cho phép một path giãn ra vừa cả hai mà không phải vẽ lại khi resize; còn `vector-effect: non-scaling-stroke` giữ nét đúng 1.5px thay vì giãn theo hộp — nếu không, nét 1.5px trong dải sẽ thành một vệt 4px trong panel.
+- **Vì sao sparkline rộng đúng 60px / 76px chứ không `flex: 1`?** Bản đầu để `flex: 1 1 auto` và **đo ra 121px** trong panel rộng 300px (`test/measure` trong lúc kiểm). Nó vừa chỗ, nhưng át cả dòng — biểu đồ thành thứ to nhất trên một dòng mà nhân vật chính là đồng coin. Cố định 60px (panel) / 76px (dải) + `margin: 0 auto` để nó căn giữa khoảng trống, đọc như một hình bên cạnh tên. Đo lại: cách chữ số lượng 23–40px, không đè.
+- **Vì sao test nến dùng server giả mà vẫn phải `destroy()` socket?** `server.close()` chỉ ngừng nhận kết nối **mới**, nó chờ các kết nối cũ rảnh đi. `fetch` của Node giữ socket sống (keep-alive), nên callback đóng không bao giờ chạy và file test **treo** thay vì fail. Phải theo dõi và `destroy()` từng socket thì teardown mới tất định — đây là lỗi thật gặp phải khi viết `test/klines.test.js`, không phải phòng xa.
+- **Vì sao symbol phải `trim()` trước khi vào URL?** Một symbol có khoảng trắng (`' ethusdt '`) đi thẳng vào query sẽ thành `symbol=%20ETHUSDT%20`, và Binance trả lỗi thay vì dữ liệu. Unit test bắt được lỗi này ngay khi viết (`test/klines.test.js`, ca "symbols are normalised").
 - **Vì sao `save-alert` phải giữ `direction: 'touch'`?** Bản trước ép mọi cảnh báo về `above`/`below` ngay tại ranh giới IPC — renderer có kiểu "chạm mốc", engine hiểu nó, nhưng lệnh lưu ném đi. Hậu quả: cảnh báo "chạm mốc" lưu xong thành "vượt lên", chỉ bắn một chiều. E2e bắt được; giờ `touch` và `tolerance` đi qua nguyên vẹn.
 - **Vì sao `markPrice` chứ không phải `miniTicker`?** `markPrice` là giá dùng để tính P&L và thanh lý trên Futures — đúng thứ một người giữ vị thế futures quan tâm.
 - **Taskbar ở cạnh nào?** Không có API cho việc này, nhưng suy ra được: taskbar là dải mà *work area* loại trừ khỏi *bounds* của màn hình. Taskbar tự ẩn báo work area bằng cả màn hình, khi đó mặc định là `bottom`.

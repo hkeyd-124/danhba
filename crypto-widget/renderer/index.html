@@ -8,8 +8,32 @@
 <link rel="stylesheet" href="styles.css" />
 <link rel="stylesheet" href="dock.css" />
 <link rel="stylesheet" href="chart.css" />
+<link rel="stylesheet" href="spark.css" />
 </head>
 <body>
+<!--
+  Shared gradient definitions for the coin sparklines.
+
+  Defined ONCE here rather than inside each sparkline: an SVG gradient is
+  referenced by id, and 8 rows each carrying their own <defs> would mean 8
+  copies of the same two gradients and 8 ids to keep unique. Two ids, one
+  place, and every sparkline points at them.
+
+  `aria-hidden` and zero size: this element paints nothing itself.
+-->
+<svg class="spark-defs" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="sparkUp" x1="0" y1="0" x2="0" y2="1">
+      <stop class="stop-up-a" offset="0%" />
+      <stop class="stop-up-b" offset="100%" />
+    </linearGradient>
+    <linearGradient id="sparkDown" x1="0" y1="0" x2="0" y2="1">
+      <stop class="stop-down-a" offset="0%" />
+      <stop class="stop-down-b" offset="100%" />
+    </linearGradient>
+  </defs>
+</svg>
+
 <div class="widget" id="widget" data-theme="solid">
 
   <!-- ============ auto-hiding title bar ============ -->
@@ -286,6 +310,7 @@
           <label class="check"><input type="checkbox" data-display="list" /><i></i><span>Danh sách coin</span></label>
           <label class="check"><input type="checkbox" data-display="alloc" /><i></i><span>Thanh tỉ trọng</span></label>
           <label class="check"><input type="checkbox" data-display="icons" /><i></i><span>Icon coin</span></label>
+          <label class="check"><input type="checkbox" data-display="spark" /><i></i><span>Biểu đồ nến</span></label>
         </div>
         <em class="hint" id="displayPanelHint">Bỏ tích để ẩn. Ít nhất một mục nên được bật, nếu không bảng sẽ trống.</em>
       </div>
@@ -296,6 +321,7 @@
           <label class="check"><input type="checkbox" data-display="stripTotal" /><i></i><span>Tổng giá trị</span></label>
           <label class="check"><input type="checkbox" data-display="stripPnl" /><i></i><span>Lãi/lỗ</span></label>
           <label class="check"><input type="checkbox" data-display="stripPct" /><i></i><span>Phần trăm</span></label>
+          <label class="check"><input type="checkbox" data-display="stripSpark" /><i></i><span>Biểu đồ nến</span></label>
         </div>
         <em class="hint" id="displayStripHint">Dải hẹp có thể tự ẩn bớt số cho vừa chỗ — đó là bố cục, không phải mất tuỳ chọn.</em>
       </div>
@@ -450,6 +476,7 @@
   <div class="grip grip-sw" data-edge="sw"></div>
 </div>
 <script src="chart.js"></script>
+<script src="sparkline.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

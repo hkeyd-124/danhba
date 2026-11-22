@@ -42,6 +42,7 @@ const { AlertEngine } = require('./src/alerts');
 const { computePositions, normalizeSymbol, symbolsInUse } = require('./src/portfolio');
 const role = require('./src/window-role');
 const dockSize = require('./src/dock-size');
+const display = require('./src/display');
 const { badgeFor, glyphColor } = require('./src/coin-icon');
 const textColor = require('./src/text-color');
 
@@ -283,7 +284,23 @@ function taskbarStripRect() {
   const horizontal = tb.edge === 'bottom' || tb.edge === 'top';
   if (!horizontal) return null;
 
-  const h = Math.max(28, Math.min(DOCK_COLLAPSED.height, tb.height - 4));
+  /**
+   * The strip grows downward when the user ticks coins.
+   *
+   * The summary line is one 13px line; each ticked coin adds another. The
+   * height is capped by the taskbar's own rectangle, because the strip is an
+   * overlay INSIDE it — a strip taller than the taskbar would hang out over
+   * the desktop and stop reading as part of the taskbar.
+   *
+   * `stripHeightFor` does the arithmetic and the clamping; this only supplies
+   * the limit. With no coins ticked it returns the 44px every earlier version
+   * used, so an existing install is unchanged.
+   */
+  const rows = display.stripCoinRows(computePositions(store.trades, prices).positions,
+    store.settings.stripCoins).length;
+  const limit = Math.max(display.STRIP_MIN_H, tb.height - 4);
+  const h = display.stripHeightFor(rows, limit);
+
   // The strip has its OWN width setting. Reading `dockWidth` here is what made
   // a dragged strip snap back: the panel's width is a different number, and
   // resizing the panel would silently resize the strip too.
@@ -364,8 +381,25 @@ function placementBounds() {
     if (r) return r;
   }
   return collapsed
-    ? dockRect(DOCK_COLLAPSED.width, DOCK_COLLAPSED.height, taskbarEdge())
+    ? dockRect(DOCK_COLLAPSED.width, stripHeight(), taskbarEdge())
     : dockPanelRect();
+}
+
+/**
+ * The collapsed strip's height, for the current selection.
+ *
+ * In 'edge' mode the strip is not confined to the taskbar, so the only limit
+ * is the work area — a strip with eight coins ticked is allowed to be tall.
+ * In 'taskbar' mode `taskbarStripRect` clamps it to the taskbar's own height
+ * instead, because there it is an overlay inside that rectangle.
+ */
+function stripHeight() {
+  const rows = display.stripCoinRows(
+    computePositions(store.trades, prices).positions,
+    store.settings.stripCoins,
+  ).length;
+  const { workArea: a } = screen.getPrimaryDisplay();
+  return display.stripHeightFor(rows, a.height);
 }
 
 function send(channel, payload) {
@@ -405,7 +439,7 @@ function pushState() {
     muted: textColor.mutedFor(chosen, theme, halo),
     faint: textColor.faintFor(chosen, theme, halo),
     halo,
-    judge: textColor.judge(chosen, theme),
+    judge: textColor.judge(chosen, theme, store.settings.bgAlpha),
   };
 
   send('state', {
@@ -1079,12 +1113,24 @@ function registerIpc() {
     if (p.display && typeof p.display === 'object') {
       allowed.display = p.display;
     }
+    /**
+     * Which coins the strip follows.
+     *
+     * Ticking a coin changes the strip's HEIGHT, so the window has to be
+     * re-placed immediately — otherwise the new row would be drawn into a
+     * 44px box and clipped until the next placement happened to run. The
+     * store normalises the list, so junk from the renderer cannot get in.
+     */
+    if (p.stripCoins !== undefined) {
+      allowed.stripCoins = p.stripCoins;
+    }
     if (typeof p.dockMode === 'string') {
       store.patchSettings(allowed);
       setDockMode(p.dockMode);
       return { ok: true, settings: store.settings };
     }
     store.patchSettings(allowed);
+    if (p.stripCoins !== undefined && isDocked() && collapsed) applyDockBounds();
     pushState();
     return { ok: true, settings: store.settings };
   });

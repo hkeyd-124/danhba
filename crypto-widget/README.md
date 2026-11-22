@@ -19,6 +19,8 @@ Giá lấy trực tiếp từ **Binance USDⓈ-M Futures**. Toàn bộ dữ li�
 | **Nhập tay** | Thêm / sửa / xoá lệnh mua–bán: đồng coin, giá vào, số lượng, phí, thời điểm, ghi chú. |
 | **Tính toán** | Giá vốn bình quân gia quyền (phí mua gộp vào giá vốn, phí bán trừ vào lãi thực hiện), P&L thực hiện + chưa thực hiện, % phân bổ danh mục. |
 | **Cảnh báo giá** | Ba kiểu: **vượt lên trên**, **giảm xuống dưới**, và **chạm mốc** (chỉ cần giá chạm mốc, không cần biết đang tăng hay giảm). Chạm ngưỡng → thông báo Windows + âm thanh. Hai kiểu đầu chỉ bắn khi giá **cắt qua** ngưỡng; kiểu "chạm mốc" bắn khi giá vào trong dải dung sai. Có cooldown 5 phút. |
+| **Chọn nội dung hiển thị** | Tích cái nào hiện cái đó: dòng tổng, P&L, phần trăm trong dải — và **theo dõi từng đồng coin riêng** (mỗi coin một dòng giá + % ngay trong dải taskbar). |
+| **Logo coin thật** | Icon SVG/PNG thật của từng đồng (ETH là logo ETH, BTC là logo BTC…), **đóng gói sẵn trong app** — không tải từ mạng. Coin chưa có logo thì vẽ badge chữ. |
 | **Giao diện tuỳ biến** | 7 kiểu nền (Đậm, Đen, Kính mờ, **Trong suốt**, **Chỉ chữ**, Aurora, Sáng), độ đục nền 0–100%, 8 màu chữ dựng sẵn + bảng chọn màu tuỳ ý. Tất cả lưu trên máy. |
 | **Chế độ "Chỉ chữ"** | Không nền, không viền, không bóng đổ — chỉ còn chữ, nhìn thẳng ra desktop. Chữ có viền tương phản tự đổi theo màu chữ nên vẫn đọc rõ trên mọi hình nền. |
 | **Thanh tiêu đề tự ẩn** | Chỉ hiện khi rê chuột vào mép trên. Bình thường widget không có thanh tiêu đề — tối giản tối đa. |
@@ -94,6 +96,41 @@ Bản build không ký sẽ bị SmartScreen cảnh báo lần đầu chạy. Đ
    - **Vượt lên** / **Xuống dưới**: chỉ báo khi giá cắt qua ngưỡng theo đúng hướng đó.
    - **Chạm mốc**: báo ngay khi giá chạm ngưỡng, **dù đang tăng hay giảm**. Có thêm ô **Dung sai** (% mỗi bên) — giá chỉ cần vào trong khoảng ± dung sai quanh mốc là báo. Để trống dùng 0,1%.
 5. Nút **📌** bật/tắt luôn nổi. Nút **▾** thu gọn. Nút **✕** ẩn xuống khay — bấm icon khay để mở lại.
+6. **⚙ → Theo dõi từng coin trong dải** → tích những coin bạn muốn thấy giá ngay trong dải taskbar.
+
+### Chọn nội dung hiển thị trong dải
+
+Bấm **⚙** → mục **Hiển thị**. Mỗi ô là một công tắc độc lập — tích thì hiện, bỏ tích thì ẩn:
+
+| Công tắc | Hiện gì |
+|---|---|
+| **Tổng giá trị** | Con số lớn ở dòng đầu |
+| **Lãi/lỗ** | Số P&L tuyệt đối |
+| **Phần trăm** | % lãi/lỗ |
+| **Theo dõi từng coin trong dải** | Mỗi coin được tích thêm **một dòng riêng**: logo + mã + giá + % |
+
+Danh sách coin để tích được **sinh từ chính danh mục của bạn** — mua coin mới thì nó tự xuất hiện trong danh sách, không phải chờ bản cập nhật. Bán hết một coin thì dòng của nó tự biến mất khỏi dải (không để lại dòng `0.00` vô nghĩa), nhưng **ô tích vẫn được nhớ** — mua lại là dòng hiện lại ngay.
+
+> **Dải trong taskbar chỉ đủ chỗ cho vài dòng.** Dải nằm *bên trong* hình chữ nhật của taskbar, nên chiều cao bị chặn bởi taskbar: taskbar 48px cho khoảng **2 dòng coin** cộng dòng tổng. Tích nhiều hơn thì phần dư bị cắt — đó là giới hạn vật lý, không phải lỗi. Muốn xem nhiều coin cùng lúc thì dùng chế độ **Cửa sổ nổi** hoặc **Sát taskbar**, ở đó dải không bị chặn chiều cao.
+
+> **Vì sao các dòng sát nhau?** Dòng coin cao **13px** (chữ 9.5–10px), không phải 18–20px như danh sách thường. Đây là mức sát nhất mà chữ vẫn không chạm dòng kế: 13px cho chữ 10px còn 3px khoảng thở, đủ để phần dưới của chữ không chạm phần trên của dòng sau. Cao hơn thì dòng thứ ba bị cắt giữa chữ — tệ hơn là không hiện.
+
+### Logo coin
+
+Mỗi coin có **logo thật** (ETH là hình thoi ETH, BTC là chữ B nghiêng màu cam…), không phải chữ viết tắt. Logo **đóng gói sẵn trong app** tại `src/coin-data.js` — **không tải từ mạng lúc chạy**, nên vẫn giữ đúng cam kết: kết nối ra ngoài duy nhất là Binance Futures.
+
+| | |
+|---|---|
+| Số coin có logo | **77** |
+| Nguồn | [spothq/cryptocurrency-icons](https://github.com/spothq/cryptocurrency-icons) (CC0-1.0) và CoinCap asset icons |
+| Định dạng | Data URI PNG 24px, gộp trong một module 44KB |
+| Coin chưa có logo | Vẽ badge: ô vuông bo góc màu thương hiệu + mã coin. Vẫn nhận ra ngay, và đó là kiểu mọi bản trước đây vẽ |
+| Màu chữ trên badge | Tự chọn đen hay trắng theo độ tương phản — nền vàng nhạt (BNB) dùng chữ đen, nền xanh đậm (ETH) dùng chữ trắng |
+| Thêm coin mới | Xem `src/coin-data.js` và mục *Thêm một coin* trong `CREDITS.md` |
+
+**Vì sao là data URI chứ không phải file ảnh?** Renderer chạy trong sandbox, không đọc được đĩa — nên byte của logo phải đi kèm state. Một module duy nhất cũng tránh được 77 file phải giữ đồng bộ với bảng tra cứu. CSP của trang là `img-src 'self' data:` — chỉ cho phép đúng hai nguồn này, nên logo **không thể** trỏ ra ngoài máy.
+
+**Vì sao 24px?** Logo chỉ hiển thị 11px trong dải và 18px trong panel. 24px là mức gấp đôi cho màn hình HiDPI, đủ nét mà vẫn giữ module ở 44KB thay vì 300KB.
 
 ### Ba chế độ vị trí
 
@@ -172,6 +209,22 @@ Mặc định widget chạy ở vai trò **Tiện ích**:
 
 ---
 
+### Màu chữ và ô đọc tương phản
+
+**⚙ → Màu chữ**: 8 màu dựng sẵn + bảng chọn màu tuỳ ý. Dưới đó là một ô đọc **tương phản** — nó đo màu chữ bạn chọn với nền hiện tại và nói thẳng là đọc được hay không.
+
+| Ô đọc hiện | Nghĩa |
+|---|---|
+| `16.5:1` + "Rất tốt" | Đo được, và đạt chuẩn WCAG |
+| `3.2:1` + "Hơi thấp" | Đo được, nhưng chữ nhỏ sẽ khó đọc |
+| `nền trong suốt` | **Không đo được** — nền là hình nền desktop, không có màu nền để đo |
+
+> **Vì sao đôi khi nó nói "không đo được" thay vì đưa ra một con số?** Với kiểu nền **Chỉ chữ**, hoặc **Trong suốt** / **Kính mờ** khi độ đục xuống dưới **60%**, phần lớn phía sau chữ là hình nền desktop của bạn. Đo màu chữ với màu nền danh nghĩa của theme lúc đó sẽ ra một con số trông rất chắc chắn nhưng sai — ví dụ "16.5:1" cho chữ có thể đang nằm trên một bức ảnh trắng. Một con số sai còn tệ hơn không có số, vì bạn sẽ tin nó. Nên dưới ngưỡng đó ô đọc nói rõ là không đo được và gợi ý dùng **Quầng chữ**.
+
+> **Vì sao theme Sáng cần màu chữ riêng?** Đo thật trên pixel: chữ xanh `#16c784` trên nền sáng chỉ đạt **1.9:1**, đỏ `#ea3943` **3.4:1**, xanh dương `#4f8cff` **3.0:1** — đều dưới chuẩn 4.5:1. Nguyên nhân là theme sáng đang dùng màu ngữ nghĩa cứng của theme tối. Bản này tách riêng bộ màu cho theme sáng (`#0a6b48`, `#b3261e`, `#1d4ed8`), sau đó **không còn mục nào dưới 4.5:1**.
+
+---
+
 ## Dữ liệu lưu ở đâu
 
 `%APPDATA%\Crypto Portfolio Widget\portfolio.json`
@@ -183,6 +236,7 @@ Mở nhanh: **⚙ → Mở thư mục dữ liệu**.
 - **`stripWidth`** là chiều rộng **riêng của dải** khi ghim, tách khỏi `dockWidth` của panel. `null` = "chưa từng kéo" → dải dùng `dockWidth`, đúng như mọi bản trước, nên nâng cấp không làm dải nhảy kích thước. Kéo dải lần đầu là khoá này được ghi.
 - **Lịch sử biểu đồ** nằm ở khoá `history` — tối đa 720 mẫu (~1 giờ), mỗi mẫu 5 giây.
 - **Cảnh báo** nằm ở khoá `alerts`. Mỗi cảnh báo có `direction` (`above` / `below` / `touch`) và — chỉ với `touch` — `tolerance` (% mỗi bên). File của bản cũ (schema v2) được nâng lên v4 khi mở app: cảnh báo cũ giữ nguyên hướng và **không** bị gắn thêm `tolerance`; `stripWidth` được đặt `null` để dải giữ đúng chiều rộng cũ.
+- **Coin theo dõi trong dải** nằm ở khoá `stripCoins` — mảng mã coin, ví dụ `["LDO", "ETH"]`, theo đúng thứ tự bạn tích. Mảng rỗng = chỉ hiện dòng tổng, đúng như mọi bản trước, nên **nâng cấp không đổi gì** cho tới khi bạn tích coin đầu tiên. File schema v5 được nâng lên v6 khi mở app và nhận `stripCoins: []`. Giá trị không phải chuỗi, không phải mã hợp lệ, hoặc trùng lặp đều bị loại — sửa tay file cũng không làm hỏng dải.
 
 Ghi file theo kiểu **atomic** (ghi file tạm rồi rename), nên mất điện giữa lúc ghi không làm hỏng dữ liệu. File hỏng được sao lưu thành `portfolio.json.corrupt-<timestamp>` chứ không bị xoá.
 
@@ -195,6 +249,7 @@ Ghi file theo kiểu **atomic** (ghi file tạm rồi rename), nên mất điệ
 | Renderer | `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`. Không có `fetch`, không có `WebSocket` — mọi giá đi qua IPC. |
 | Điều hướng | `will-navigate` chặn, `setWindowOpenHandler` từ chối, `will-attach-webview` chặn, mọi permission request bị từ chối. |
 | Kết nối ra ngoài | **Duy nhất** `fapi.binance.com` / `fstream.binance.com` (và `wss://fstream.binance.com`). Không analytics, không crash report, không update check. |
+| Logo coin | **Đóng gói sẵn trong app** tại `renderer/assets/coins/` — **không tải từ CDN lúc chạy**. CSP `img-src 'self'` chỉ cho phép ảnh cùng gốc, nên kể cả có ai chèn thẻ `<img>` trỏ ra ngoài thì trình duyệt cũng chặn. |
 | Dữ liệu | Chỉ một file JSON trên máy. Không upload, không đồng bộ, không tài khoản. |
 
 ---
@@ -202,7 +257,7 @@ Ghi file theo kiểu **atomic** (ghi file tạm rồi rename), nên mất điệ
 ## Kiểm thử
 
 ```bat
-npm test          :: 102 unit test (toán danh mục + feed + cảnh báo + migration dữ liệu + hình học biểu đồ + vai trò cửa sổ + kích thước dải ghim)
+npm test          :: 160 unit test (toán danh mục + feed + cảnh báo + migration dữ liệu + hình học biểu đồ + vai trò cửa sổ + kích thước dải ghim + chọn coin theo dõi + logo coin + tương phản màu chữ)
 ```
 
 E2e cần Xvfb (Linux/CI) vì nó khởi động Electron thật:
@@ -219,7 +274,8 @@ npm run test:e2e  # 153 assertion: thêm/sửa/xoá lệnh, tick giá, cảnh b�
 ### Kiểm thử chế độ vị trí và biểu đồ
 
 ```bash
-xvfb-run -a node test/e2e.js        # 153 assertion, gồm 20 cho chế độ ghim + 20 cho biểu đồ
+xvfb-run -a node test/e2e.js        # 154 assertion, gồm 20 cho chế độ ghim + 20 cho biểu đồ
+xvfb-run -a node test/strip-coins.e2e.js  # 27 assertion cho dòng coin trong dải + logo thật + tương phản
 xvfb-run -a node test/strip.e2e.js  # 20 assertion riêng cho kéo giãn dải (chạy độc lập được)
 xvfb-run -a node test/window-role.e2e.js  # 13 assertion cho vai trò cửa sổ
 xvfb-run -a node test/dock-shots.js # ảnh chụp dải ghim → shots-dock/
@@ -245,12 +301,17 @@ crypto-widget/
 │   ├── chart.js         # hình học biểu đồ (thuần)
 │   ├── store.js         # lưu JSON atomic + lịch sử biểu đồ
 │   ├── dock-size.js     # kích thước dải ghim (thuần — unit test trực tiếp)
+│   ├── display.js       # công tắc hiển thị + chọn coin theo dõi (thuần)
+│   ├── coin-icon.js     # logo coin + badge dự phòng (thuần)
+│   ├── coin-data.js     # 77 logo coin, data URI PNG 24px (sinh sẵn, 44KB)
+│   ├── text-color.js    # màu chữ + đo tương phản (thuần)
 │   └── window-role.js   # vai trò cửa sổ (thuần — unit test trực tiếp)
 ├── renderer/
 │   ├── index.html
 │   ├── styles.css
 │   ├── dock.css         # chế độ ghim + trong taskbar
-│   └── app.js
+│   ├── app.js
+│   └── assets/coins/    # CREDITS.md — nguồn và giấy phép logo
 ├── build/
 │   └── make-icons.js    # sinh icon từ source
 └── test/
@@ -267,6 +328,12 @@ crypto-widget/
 - **Taskbar ở cạnh nào?** Không có API cho việc này, nhưng suy ra được: taskbar là dải mà *work area* loại trừ khỏi *bounds* của màn hình. Taskbar tự ẩn báo work area bằng cả màn hình, khi đó mặc định là `bottom`.
 - **Vì sao `type: 'toolbar'` không dùng được?** Tuỳ chọn `type` của `BrowserWindow` chỉ có tác dụng trên **Linux** và **macOS**; Windows bỏ qua hoàn toàn. Thứ thật sự loại cửa sổ khỏi taskbar và Alt+Tab là `skipTaskbar`. Có unit test chặn `type: 'toolbar'` quay lại code.
 - **Vì sao vòng đo 2 giây?** Windows không bắn sự kiện nào khi taskbar đổi kích thước, đổi cạnh, khi DPI đổi, hay khi `explorer.exe` khởi động lại. Cách duy nhất là đo lại và so sánh một "dấu vân tay" gồm hình chữ nhật taskbar + bounds + work area + scaleFactor.
+- **Vì sao dải tự cao lên khi tích coin?** Dòng tổng chiếm một dòng 13px; mỗi coin được tích thêm một dòng 13px nữa. Chiều cao do `stripHeightFor()` tính và **bị chặn bởi chính hình chữ nhật taskbar** — dải là lớp phủ *bên trong* taskbar, cao hơn taskbar thì nó thò ra ngoài desktop và không còn đọc như một phần của taskbar. Taskbar 48px cho 44px khả dụng → 2 dòng coin. Chưa tích coin nào thì hàm trả về đúng 44px của mọi bản trước, nên bản cũ không đổi gì.
+- **Vì sao dòng coin cao 13px?** Đây là mức sát nhất mà chữ 10px vẫn không chạm dòng kế: 13px cho chữ 10px còn 3px khoảng thở. Cao hơn thì dòng thứ ba bị cắt giữa chữ trong dải 44px — tệ hơn là không hiện. Đo bằng DOM: `mid` của logo, mã, giá và % đều trùng khít (38.5 / 51.5 / 64.5), nên các cột thẳng hàng thật chứ không phải "trông có vẻ".
+- **Vì sao logo là data URI?** Renderer chạy sandbox, không đọc được đĩa, nên byte phải đi kèm state. CSP `img-src 'self' data:` chỉ cho phép đúng hai nguồn — logo không thể trỏ ra ngoài máy, và không có lần gọi mạng nào cho một thứ chỉ để trang trí.
+- **Vì sao nền trong suốt dưới 60% báo "không đo được"?** Theme `clear`/`glass` có thanh độ đục kéo xuống 0. Ở 0.35 thì thứ nằm sau chữ là **hình nền**, không phải `#0a0e16` — nên đo theo màu danh nghĩa của theme sẽ ra một con số tự tin "16.5:1" cho chữ có thể đang nằm trên một bức ảnh trắng. Đó đúng là kiểu sai mà ô đọc tương phản sinh ra để chặn, và nó chỉ cách một cái kéo thanh trượt. Dưới ngưỡng đó câu trả lời là "không đo được", kèm lý do và cách khắc phục.
+- **Vì sao công tắc hiển thị từng trông như hỏng?** `[hidden]` của trình duyệt thua mọi rule `display` do tác giả đặt — và `.hero-row`, `.hero-label`, `.alloc`, `.collapsed-view` đều là flex/grid. Nên `el.hidden = true` không có tác dụng gì. Thêm `[hidden] { display: none !important; }` là xong; `!important` ở đây chính là mục đích, không phải lối tắt.
+- **Vì sao hai chỗ màu chữ không đổi theo bảng chọn?** `.seg-btn.is-active` là `#d5e4ff` và `.calc` là `#b9cdf0` — cả hai viết cứng, nên bảng chọn màu chữ không bao giờ chạm tới. Giờ chúng đọc `var(--text)` và `var(--muted)`, là các tông dẫn xuất từ màu bạn chọn.
 
 ---
 

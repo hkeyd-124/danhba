@@ -201,6 +201,153 @@
 .widget.is-taskbar .cv-pnl { font-size: 11px; }
 .widget.is-taskbar .cv-pct { font-size: 10px; }
 
+/* ================================================================ per-coin rows */
+/**
+ * The coin rows sit UNDER the summary line, inside the same strip.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the line spacing is 13px and not the 18-20 a normal list would use
+ *
+ * The strip is an overlay inside the taskbar's own rectangle, so its height is
+ * capped by the taskbar's: a 48px taskbar leaves 44px of usable box. The
+ * summary line takes one 13px line, which leaves room for two coin rows and
+ * nothing more. At 18px per row the third line would be clipped mid-glyph, and
+ * a half-drawn number is worse than one that is not shown at all.
+ *
+ * The user asked for the rows to sit closer together than they were, and this
+ * is the tightest spacing that still keeps the 10px text off its neighbours:
+ * 13px line box for 10px type leaves 3px of air, which is what stops the
+ * descenders of one row touching the caps of the next.
+ * ---------------------------------------------------------------------------
+ */
+.cv-coins {
+  display: flex;
+  flex-direction: column;
+  /* 0, not a gap: the 13px line box already carries the separation, and a gap
+     on top of it would push the last row out of a 44px strip. */
+  gap: 0;
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+}
+
+.cv-coin {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 13px;
+  line-height: 13px;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The logo is 11px here, not the 18px of the panel: at 13px of row height an
+   18px badge would overlap the row above and below. */
+.cv-coin .coin,
+.cv-coin .coin-sm {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  font-size: 5px;
+  letter-spacing: 0;
+  box-shadow: none;
+}
+
+.cv-coin-sym {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .1px;
+  flex: 0 0 auto;
+  /* A 4-character ticker at 9.5px is ~26px; the cap keeps a long one from
+     eating the price. */
+  max-width: 42px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cv-coin-price {
+  font-size: 9.5px;
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cv-coin-pct {
+  font-size: 9px;
+  flex: 0 0 auto;
+  min-width: 40px;
+  text-align: right;
+}
+
+/*
+ * The strip becomes a COLUMN only when it actually holds coin rows: the
+ * summary line on top, the rows beneath it.
+ *
+ * Guarded by `:has(.cv-coins:not([hidden]))` on purpose. Making the strip a
+ * column unconditionally would change the layout of every existing install
+ * that has no coin ticked — the summary would be re-laid-out for a case that
+ * is not happening. With the guard, a strip with no coins selected is exactly
+ * the flex row every earlier version drew.
+ */
+/*
+ * `.is-collapsed`, not `.is-docked`.
+ *
+ * The first version of this rule was scoped to `.is-docked` / `.is-taskbar`,
+ * which is only true when the widget is pinned to the taskbar. In the default
+ * FLOATING mode the widget carries `is-collapsed` alone — so the rule never
+ * applied, the strip stayed a flex ROW, and the coin rows were laid out beside
+ * the summary instead of under it. The screenshot showed the coin list printed
+ * straight over the total.
+ *
+ * `is-collapsed` is the class that actually means "the strip is showing", in
+ * every dock mode, so that is what this keys off.
+ */
+.widget.is-collapsed .collapsed-view:has(.cv-coins:not([hidden])) {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+/*
+ * When coin rows are present the summary line and the right-hand group have to
+ * share one row, so the value drops a point. Measured: at 14px the total plus
+ * two coin rows overflowed a 44px strip by 3px.
+ */
+.widget.is-collapsed .collapsed-view:has(.cv-coins:not([hidden])) .cv-value {
+  font-size: 12.5px;
+}
+.widget.is-collapsed .collapsed-view:has(.cv-coins:not([hidden])) .cv-pnl {
+  font-size: 10px;
+}
+.widget.is-collapsed .collapsed-view:has(.cv-coins:not([hidden])) .cv-pct {
+  font-size: 9px;
+}
+
+/*
+ * The summary line and the right-hand group must sit on ONE line above the
+ * coin rows. They are siblings in the column, so they are wrapped by the
+ * markup change below — this rule only exists to keep the two of them from
+ * each taking a full row when the wrapper is absent (an older cached page).
+ */
+.cv-sum {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  flex: 0 0 auto;
+  /* 100%, not `auto`: as a flex item in a row its width collapsed to 0, which
+     is why the summary and the coin rows ended up on top of each other. */
+  width: 100%;
+  min-width: 0;
+}
+
 /*
  * The strip is only ~40px tall and sits over the taskbar, so the auto-hiding
  * bar's buttons would land on the numbers. Same rule as the edge strip: the

@@ -15,6 +15,7 @@ const state = {
   badges: {},
   tones: null,
   history: [],
+  klines: {},
   feedStatus: 'idle',
   collapsed: false,
   docked: false,
@@ -157,6 +158,67 @@ function paintStyles(root) {
     el.style.setProperty('--c', el.dataset.c);
   });
 }
+
+/**
+ * A coin's sparkline, as inline SVG.
+ *
+ * ---------------------------------------------------------------------------
+ * Where it goes and why
+ *
+ * Between the ticker and the price — the empty middle of the row. That space
+ * was dead: the name is left-aligned, the price is right-aligned, and nothing
+ * used the gap. Putting the shape there means the row reads
+ * "which coin · how it moved · what it costs", left to right, with no extra
+ * line of height.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the geometry is a separate module
+ *
+ * `sparkline.js` is pure (values in, path out) and unit-tested on the cases
+ * that actually break a line: one value, a flat series, a missing series. This
+ * function only measures the box and writes the result into the DOM.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the viewBox is fixed and `preserveAspectRatio="none"`
+ *
+ * The same markup is used in the 44px strip and in the panel, at two different
+ * widths. A fixed viewBox with `none` lets one path stretch to either without
+ * a re-render on resize, and `vector-effect: non-scaling-stroke` keeps the
+ * line 1.5px instead of stretching it with the box.
+ * ---------------------------------------------------------------------------
+ *
+ * @param {string} symbol  e.g. "LDOUSDT"
+ * @param {{cls:string}} opts
+ * @returns {string} SVG markup, or '' when there is nothing to draw
+ */
+const SPARK_BOX = { w: 100, h: 30, padY: 3 };
+
+function sparkHtml(symbol, opts) {
+  const o = opts || {};
+  const entry = state.klines && state.klines[symbol];
+  if (!entry || !Array.isArray(entry.values) || entry.values.length < 2) return '';
+
+  const built = window.Spark.build(entry.values, {
+    width: SPARK_BOX.w,
+    height: SPARK_BOX.h,
+    padY: SPARK_BOX.padY,
+  });
+  if (built.empty) return '';
+
+  const dir = built.direction;
+  const fill = dir === 'down' ? 'url(#sparkDown)' : dir === 'up' ? 'url(#sparkUp)' : 'none';
+  const cls = `spark is-${dir}${o.cls ? ` ${o.cls}` : ''}`;
+
+  /**
+   * `aria-hidden` because the number beside it already states the change: a
+   * screen reader announcing "graphic" adds nothing the row does not say.
+   */
+  return `<svg class="${cls}" viewBox="0 0 ${SPARK_BOX.w} ${SPARK_BOX.h}" preserveAspectRatio="none" aria-hidden="true" focusable="false">`
+    + `<path class="spark-area" d="${built.area}" fill="${fill}" />`
+    + `<path class="spark-line" d="${built.line}" />`
+    + '</svg>';
+}
+
 function toLocalInput(ts) {
   const d = new Date(ts);
   const pad = (x) => String(x).padStart(2, '0');
@@ -299,10 +361,17 @@ function renderStripCoins() {
   box.innerHTML = rows.map((p) => {
     const pnlCls = cls(p.unrealized);
     const price = p.hasPrice ? fmtPrice(p.mark) : '—';
+    /**
+     * The sparkline sits between the ticker and the price — the empty middle
+     * of the row. It is omitted (not blanked) when the switch is off or the
+     * series has not arrived, so the price keeps its right edge either way.
+     */
+    const spark = shows('stripSpark') ? sparkHtml(p.symbol, { cls: 'spark-strip' }) : '';
     return `
       <div class="cv-coin" data-symbol="${esc(p.symbol)}">
         ${badgeHtml(p.symbol, 'sm')}
         <span class="cv-coin-sym">${esc(p.base)}</span>
+        ${spark}
         <span class="cv-coin-price">${price}</span>
         <span class="cv-coin-pct ${pnlCls}">${fmtPct(p.pnlPct)}</span>
       </div>`;
@@ -355,10 +424,17 @@ function renderPositions() {
     const name = withIcons
       ? badgeHtml(p.symbol)
       : `<span class="pos-sym" data-fg="${esc(c)}">${esc(p.base)}</span>`;
+    /**
+     * The sparkline goes in the row's own middle: after the name, before the
+     * value. `.pos-top` is a flex row, so the SVG takes the leftover width and
+     * the value column keeps its right edge.
+     */
+    const spark = shows('spark') ? sparkHtml(p.symbol, { cls: 'spark-pos' }) : '';
     return `
       <div class="pos" data-symbol="${esc(p.symbol)}">
         <div class="pos-top">
           ${name}
+          ${spark}
           <span class="pos-qty">${fmtQty(p.qty)} · TB ${fmtPrice(p.avgCost)}</span>
         </div>
         <div class="pos-val">${fmtMoney(p.value)}</div>
@@ -1398,6 +1474,18 @@ api.onPrices(({ prices }) => {
 api.onHistory((h) => {
   state.history = h || [];
   renderChart();
+});
+/**
+ * Candle history arrived (or was refreshed).
+ *
+ * Only the two lists that draw a sparkline are repainted, not the whole
+ * widget: this fires on a 60s timer, and a full render would rebuild the
+ * trade list and the settings sheet for a change that touches neither.
+ */
+api.onKlines((k) => {
+  state.klines = k || {};
+  renderStripCoins();
+  renderPositions();
 });
 api.onFeedStatus((s) => { state.feedStatus = s; renderFeed(); });
 api.onCollapsed((c) => { state.collapsed = c; renderSettings(); });

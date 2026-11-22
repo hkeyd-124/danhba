@@ -99,3 +99,72 @@ test('every brand colour is a valid 6-digit hex', () => {
   const bad = Object.entries(BRAND).filter(([, c]) => !/^#[0-9a-f]{6}$/i.test(c));
   assert.deepEqual(bad, []);
 });
+
+/* ==========================================================================
+ * Real logos
+ * ========================================================================== */
+
+const { iconFor, COIN_ICON, COIN_DATA } = require('../src/coin-icon');
+
+test('every coin in the icon table has real bytes behind it', () => {
+  // A coin listed here but with no data renders a broken image, which looks
+  // worse than the drawn badge it replaced. This is the assertion that keeps
+  // the table and the vendored data from drifting apart.
+  const bad = [];
+  for (const base of Object.keys(COIN_ICON)) {
+    const uri = COIN_DATA[base];
+    if (!uri) { bad.push(`${base} -> no data`); continue; }
+    if (!/^data:image\/(svg\+xml|png);base64,[A-Za-z0-9+/=]+$/.test(uri)) {
+      bad.push(`${base} -> not a base64 image data URI`);
+      continue;
+    }
+    // A truncated base64 payload decodes to a few bytes and paints nothing.
+    const payload = uri.slice(uri.indexOf(',') + 1);
+    if (Buffer.from(payload, 'base64').length < 100) bad.push(`${base} -> payload too small`);
+  }
+  assert.deepEqual(bad, [], `bad icon data:\n${bad.join('\n')}`);
+});
+
+test('iconFor returns a data URI, never a URL or a path', () => {
+  // The page's CSP is `img-src 'self' data:`. A path would need a file on disk
+  // the sandboxed renderer cannot read; an absolute URL would be blocked. The
+  // data URI is the only form that works, and it can never point off-machine.
+  const p = iconFor('ETHUSDT');
+  assert.ok(p.startsWith('data:image/'), `expected a data URI, got ${String(p).slice(0, 40)}`);
+  assert.ok(!/^https?:/i.test(p), 'must not be an absolute URL');
+  assert.ok(!p.startsWith('/'), 'must not be a filesystem path');
+});
+
+test('iconFor accepts a bare ticker as well as a full symbol', () => {
+  assert.equal(iconFor('ETH'), iconFor('ETHUSDT'));
+  assert.equal(iconFor('eth'), iconFor('ETHUSDT'));
+});
+
+test('iconFor returns null for a coin with no vendored logo', () => {
+  // The drawn badge is the fallback, so this must be null rather than a URI
+  // to data that does not exist.
+  assert.equal(iconFor('PEPEUSDT'), null);
+  assert.equal(iconFor('NOTACOINUSDT'), null);
+  assert.equal(iconFor(''), null);
+});
+
+test('badgeFor carries the icon alongside the colour and glyph', () => {
+  const eth = badgeFor('ETHUSDT');
+  assert.ok(eth.icon.startsWith('data:image/'), 'ETH must carry a real logo');
+  assert.equal(eth.color, BRAND.ETH);
+  assert.equal(eth.glyph, 'ETH');
+
+  // A coin with no logo still gets a usable badge.
+  const pepe = badgeFor('PEPEUSDT');
+  assert.equal(pepe.icon, null);
+  assert.equal(pepe.glyph, 'PEPE');
+  assert.ok(/^#[0-9a-f]{6}$/i.test(pepe.color));
+});
+
+test('the icon table only names coins that are in the brand table', () => {
+  // A logo for a coin with no brand colour would render, but its allocation
+  // bar and ticker text would fall back to a hash colour — an inconsistency
+  // nobody would think to look for.
+  const orphans = Object.keys(COIN_ICON).filter((b) => !BRAND[b]);
+  assert.deepEqual(orphans, []);
+});

@@ -76,7 +76,17 @@ test('judge reports a real ratio on a solid theme', () => {
   const j = tc.judge('#e8eefc', 'solid');
   assert.equal(typeof j.ratio, 'number');
   assert.equal(j.level, 'good');
-  assert.ok(j.message.includes(':1'));
+  /*
+   * The message must NOT repeat the ratio.
+   *
+   * The chip beside it already prints "16.5:1", so a message that also began
+   * "Tương phản 16.5:1 —" showed the same figure twice in one row and read as
+   * a rendering glitch. The number belongs to the chip; the sentence carries
+   * the verdict. This assertion is what keeps the two from drifting back
+   * together.
+   */
+  assert.ok(!j.message.includes(':1'), 'the message must not repeat the ratio the chip already shows');
+  assert.ok(j.message.length > 10, 'the message must still say something useful');
 });
 
 test('judge refuses to invent a ratio on the bare theme', () => {

@@ -939,8 +939,24 @@ async function findTarget(port, tries = 60) {
     `);
     check('title bar is invisible at rest', Number(tbState.opacity) === 0, `opacity=${tbState.opacity}`);
     check('hidden title bar does not swallow clicks', tbState.pointer === 'none', tbState.pointer);
-    check('a hover sensor covers the top edge', tbState.hasZone && tbState.zoneH > 0,
-      `h=${tbState.zoneH}`);
+    /**
+     * There is no sensor ELEMENT any more, and that is deliberate.
+     *
+     * The old `#tbZone` was a real element covering the top strip, which means
+     * it swallowed clicks there too. In dock mode the whole window is 44px
+     * tall, so a 20px sensor covered the top half of the summary and clicking
+     * it did nothing. Hover is now detected from a document-level mousemove
+     * (see app.js), which observes the pointer without ever taking a click.
+     *
+     * So the assertion is not "a sensor exists" — it is "the top edge is
+     * reachable and does not block clicks", which is what the sensor was for.
+     * The behaviour itself is checked in the next block, by driving the same
+     * mousemove the real pointer produces.
+     */
+    check('no sensor element steals clicks from the top edge', tbState.hasZone === false,
+      'a #tbZone element is back — it will swallow clicks in the 44px strip');
+    check('the top edge is not covered by a click-blocking layer',
+      tbState.pointer === 'none', tbState.pointer);
     check('title bar is a thin strip, not a full header', tbState.barH > 0 && tbState.barH <= 32,
       `h=${tbState.barH}`);
 
@@ -1158,9 +1174,12 @@ async function findTarget(port, tries = 60) {
       JSON.stringify(bareAfterReload));
 
     // ---------- 8h. the title bar must not get stuck open after a click
+    //
+    // Driven through the document-level mousemove the real pointer produces,
+    // not through the old `#tbZone` element — that element was removed on
+    // purpose because it swallowed clicks in the 44px docked strip.
     await cdp.eval(`
-      const zone = document.getElementById('tbZone');
-      zone.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+      document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 200, clientY: 4 }));
       return true;
     `);
     await wait(250);

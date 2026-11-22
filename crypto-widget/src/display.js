@@ -33,9 +33,11 @@ const DISPLAY_KEYS = [
   'list',
   'alloc',
   'icons',
+  'spark',
   'stripTotal',
   'stripPnl',
   'stripPct',
+  'stripSpark',
 ];
 
 /**
@@ -52,9 +54,11 @@ const DEFAULT_DISPLAY = Object.freeze({
   list: true,
   alloc: true,
   icons: true,
+  spark: true,
   stripTotal: true,
   stripPnl: true,
   stripPct: true,
+  stripSpark: true,
 });
 
 /** Human labels, used by the settings sheet and by the tests' messages. */
@@ -66,9 +70,11 @@ const DISPLAY_LABELS = Object.freeze({
   list: 'Danh sách coin',
   alloc: 'Thanh phân bổ',
   icons: 'Icon đồng coin',
+  spark: 'Biểu đồ nến',
   stripTotal: 'Tổng giá trị',
   stripPnl: 'Lãi/lỗ (số tiền)',
   stripPct: 'Lãi/lỗ (%)',
+  stripSpark: 'Biểu đồ nến',
 });
 
 /**

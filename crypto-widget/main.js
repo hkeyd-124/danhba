@@ -42,6 +42,8 @@ const { AlertEngine } = require('./src/alerts');
 const { computePositions, normalizeSymbol, symbolsInUse } = require('./src/portfolio');
 const role = require('./src/window-role');
 const dockSize = require('./src/dock-size');
+const { badgeFor, glyphColor } = require('./src/coin-icon');
+const textColor = require('./src/text-color');
 
 const IS_TEST = process.env.CPW_TEST === '1';
 const EXPANDED = { width: 420, height: 660 };
@@ -372,6 +374,40 @@ function send(channel, payload) {
 
 function pushState() {
   const { positions, totals, warnings } = computePositions(store.trades, prices);
+
+  /**
+   * Coin badges are computed here, not in the renderer.
+   *
+   * The renderer is sandboxed and has no `require`, so it cannot reach
+   * src/coin-icon.js. Sending the badge with each position keeps the colour
+   * table in one place and means the renderer only has to paint what it is
+   * given — no second copy of the brand colours to drift out of sync.
+   */
+  const badges = {};
+  for (const p of positions) {
+    const b = badgeFor(p.symbol);
+    badges[p.symbol] = { ...b, ink: glyphColor(b.color) };
+  }
+
+  /**
+   * The derived text tones travel with the state.
+   *
+   * They depend on the text colour AND the theme, and the theme can change
+   * without the colour changing, so the renderer cannot cache them. Computing
+   * them here also means the settings sheet's contrast readout and the painted
+   * colours come from the same function.
+   */
+  const theme = store.settings.theme || 'solid';
+  const chosen = store.settings.textColor || textColor.DEFAULT_TEXT;
+  const halo = textColor.haloFor(chosen);
+  const tones = {
+    text: textColor.normalizeHex(chosen) || textColor.DEFAULT_TEXT,
+    muted: textColor.mutedFor(chosen, theme, halo),
+    faint: textColor.faintFor(chosen, theme, halo),
+    halo,
+    judge: textColor.judge(chosen, theme),
+  };
+
   send('state', {
     trades: store.trades,
     alerts: store.alerts,
@@ -380,6 +416,8 @@ function pushState() {
     totals,
     warnings,
     prices,
+    badges,
+    tones,
     history: store.history,
     feedStatus: feed ? feed.status : 'idle',
     collapsed,
@@ -1032,6 +1070,15 @@ function registerIpc() {
     if (typeof p.chartRange === 'number' && Number.isFinite(p.chartRange)) {
       allowed.chartRange = Math.min(60, Math.max(5, Math.round(p.chartRange)));
     }
+    /**
+     * What is shown. The renderer sends one key at a time (a checkbox click),
+     * so the patch is merged into the stored record rather than replacing it —
+     * `store.patchSettings` does that merge through `normalizeDisplay`, which
+     * also drops keys this build does not know.
+     */
+    if (p.display && typeof p.display === 'object') {
+      allowed.display = p.display;
+    }
     if (typeof p.dockMode === 'string') {
       store.patchSettings(allowed);
       setDockMode(p.dockMode);
@@ -1113,6 +1160,7 @@ function registerIpc() {
           dockWidth: store.settings.dockWidth,
           stripWidth: store.settings.stripWidth,
           expandedHeight: store.settings.expandedHeight,
+          display: store.settings.display,
         },
       };
     });

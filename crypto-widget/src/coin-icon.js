@@ -9,9 +9,14 @@
  * Binance Futures price feed. Fetching coin logos from a CDN at runtime would
  * break that promise for a decoration, so it is not done.
  *
- * Instead the logos are VENDORED into `renderer/assets/coins/` and loaded from
- * disk like any other stylesheet. Nothing is fetched while the widget runs; the
- * only thing that ever reaches the network is the price feed.
+ * Instead the logos are VENDORED into `src/coin-data.js` as data URIs and
+ * shipped inside the app. Nothing is fetched while the widget runs; the only
+ * thing that ever reaches the network is the price feed.
+ *
+ * A data URI rather than a file per coin, for two reasons: the renderer is
+ * sandboxed and cannot `require`, so the bytes have to travel with the state
+ * anyway; and 77 separate image files would be 77 more things to keep in sync
+ * with the table below. One module, one source of truth.
  *
  * Sources, both of which permit redistribution:
  *   - spothq/cryptocurrency-icons (CC0-1.0) — 43 coins, as SVG
@@ -21,8 +26,6 @@
  * coin's brand colour with its ticker inside. That is a deliberate fallback,
  * not a placeholder to be embarrassed about — it identifies the coin at a
  * glance and is what every version before this one drew.
- *
- * `renderer/assets/coins/CREDITS.md` records the provenance and licence.
  * ---------------------------------------------------------------------------
  */
 
@@ -122,95 +125,21 @@ const BRAND = Object.freeze({
 });
 
 /**
- * Coins whose real logo is vendored in `renderer/assets/coins/`.
+ * The vendored logos, as data URIs.
  *
- * Generated from what actually downloaded, not from a wish list: a coin listed
- * here but missing on disk would render a broken image, which looks worse than
- * the drawn badge it replaced. `test/coin-icon.test.js` walks this table and
- * asserts every file exists, so the two can never drift apart.
+ * `src/coin-data.js` is generated from the two upstream sets and holds one
+ * entry per coin we have a real logo for. It is a plain object of
+ * `TICKER -> data:image/...;base64,...`.
+ *
+ * Kept as a separate module so this file stays readable: the data is 32KB of
+ * base64 and nothing here needs to see it.
  */
-const COIN_ICON = Object.freeze({
-  AAVE: 'aave.svg',
-  ADA: 'ada.svg',
-  ALGO: 'algo.svg',
-  APT: 'apt.png',
-  ARB: 'arb.png',
-  ATOM: 'atom.svg',
-  AVAX: 'avax.svg',
-  AXS: 'axs.png',
-  BCH: 'bch.svg',
-  BERA: 'bera.png',
-  BNB: 'bnb.svg',
-  BTC: 'btc.svg',
-  CHZ: 'chz.svg',
-  COMP: 'comp.svg',
-  CRV: 'crv.svg',
-  DASH: 'dash.svg',
-  DOGE: 'doge.svg',
-  DOT: 'dot.svg',
-  DYDX: 'dydx.png',
-  EIGEN: 'eigen.png',
-  ENA: 'ena.png',
-  ENJ: 'enj.svg',
-  EOS: 'eos.svg',
-  ETC: 'etc.svg',
-  ETH: 'eth.svg',
-  FET: 'fet.png',
-  FIL: 'fil.svg',
-  FLOW: 'flow.png',
-  GALA: 'gala.png',
-  GRT: 'grt.svg',
-  HBAR: 'hbar.png',
-  HYPE: 'hype.png',
-  ICP: 'icp.svg',
-  IMX: 'imx.png',
-  INJ: 'inj.png',
-  JUP: 'jup.png',
-  KSM: 'ksm.svg',
-  LDO: 'ldo.png',
-  LINK: 'link.svg',
-  LTC: 'ltc.svg',
-  MANA: 'mana.svg',
-  MATIC: 'matic.svg',
-  MKR: 'mkr.svg',
-  NEAR: 'near.png',
-  NEO: 'neo.svg',
-  ONDO: 'ondo.png',
-  ONE: 'one.svg',
-  OP: 'op.png',
-  PENGU: 'pengu.png',
-  POL: 'pol.png',
-  PYTH: 'pyth.png',
-  QTUM: 'qtum.svg',
-  RENDER: 'render.png',
-  RNDR: 'rndr.png',
-  RUNE: 'rune.png',
-  SAND: 'sand.svg',
-  SEI: 'sei.png',
-  SHIB: 'shib.png',
-  SNX: 'snx.svg',
-  SOL: 'sol.svg',
-  STX: 'stx.svg',
-  SUI: 'sui.png',
-  TAO: 'tao.png',
-  THETA: 'theta.svg',
-  TIA: 'tia.png',
-  TON: 'ton.png',
-  TRX: 'trx.svg',
-  UNI: 'uni.svg',
-  VET: 'vet.svg',
-  VIRTUAL: 'virtual.png',
-  WIF: 'wif.png',
-  WLD: 'wld.png',
-  XLM: 'xlm.svg',
-  XMR: 'xmr.svg',
-  XRP: 'xrp.svg',
-  ZEC: 'zec.svg',
-  ZIL: 'zil.svg',
-});
+const COIN_DATA = require('./coin-data');
 
-/** Where the vendored logos live, relative to the renderer's own document. */
-const ICON_DIR = 'assets/coins';
+/** The tickers we have a real logo for, sorted, for the tests and the docs. */
+const COIN_ICON = Object.freeze(
+  Object.keys(COIN_DATA).sort().reduce((acc, k) => { acc[k] = k; return acc; }, {}),
+);
 
 /**
  * Fallback palette for a coin that is not in the brand table.
@@ -236,19 +165,19 @@ function hash(s) {
 }
 
 /**
- * The path to a coin's vendored logo, or null when we have none.
+ * A coin's vendored logo as a data URI, or null when we have none.
  *
- * Returns a path, never a URL: the renderer resolves it against its own
- * document, and the page's CSP (`img-src 'self'`) allows exactly that and
- * nothing off the machine.
+ * A data URI, not a path: the renderer is sandboxed and cannot read the disk,
+ * so the bytes travel with the state. The page's CSP allows `img-src 'self'
+ * data:` — and nothing else — so this is the only kind of image the widget can
+ * paint, and it can never point off the machine.
  *
  * @param {string} symbol e.g. "ETHUSDT" or "ETH"
  * @returns {string|null}
  */
 function iconFor(symbol) {
   const base = baseOf(symbol);
-  const file = COIN_ICON[base];
-  return file ? `${ICON_DIR}/${file}` : null;
+  return COIN_DATA[base] || null;
 }
 
 /**
@@ -321,6 +250,6 @@ module.exports = {
   baseOf,
   BRAND,
   COIN_ICON,
-  ICON_DIR,
+  COIN_DATA,
   FALLBACK,
 };

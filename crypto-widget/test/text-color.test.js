@@ -121,3 +121,45 @@ test('an invalid colour falls back instead of throwing', () => {
   assert.doesNotThrow(() => tc.judge(undefined, 'solid'));
   assert.equal(tc.judge(undefined, 'solid').level, 'good');
 });
+
+/* ==========================================================================
+ * A see-through theme at low opacity has no measurable surface
+ * ========================================================================== */
+
+test('a translucent theme at low opacity reports "unknown", not a fake ratio', () => {
+  // The bug: 'clear' at 35% opacity paints a mostly-transparent fill, so the
+  // text sits on the wallpaper. Measuring against the theme's nominal colour
+  // produced a confident "16.5:1" for text that might be on a white photo —
+  // the exact failure this readout exists to prevent, reachable by dragging
+  // one slider.
+  const j = tc.judge('#e8eefc', 'clear', 0.35);
+  assert.equal(j.ratio, null);
+  assert.equal(j.level, 'unknown');
+  assert.match(j.message, /35%/);
+});
+
+test('the same theme at high opacity is measured normally', () => {
+  const j = tc.judge('#e8eefc', 'clear', 0.95);
+  assert.equal(typeof j.ratio, 'number');
+  assert.equal(j.level, 'good');
+});
+
+test('a solid theme is measured whatever the opacity says', () => {
+  // 'solid' is opaque by definition; the alpha slider does not apply to it,
+  // so a low value must not turn its readout into "unknown".
+  const j = tc.judge('#e8eefc', 'solid', 0.1);
+  assert.equal(typeof j.ratio, 'number');
+});
+
+test('omitting the opacity keeps the old behaviour', () => {
+  // A caller that does not know the opacity (an older payload, a unit test)
+  // must not silently lose its readout.
+  const j = tc.judge('#e8eefc', 'clear');
+  assert.equal(typeof j.ratio, 'number');
+});
+
+test('bare is still unknown regardless of opacity', () => {
+  const j = tc.judge('#e8eefc', 'bare', 1);
+  assert.equal(j.ratio, null);
+  assert.equal(j.level, 'unknown');
+});

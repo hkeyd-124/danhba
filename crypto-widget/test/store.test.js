@@ -27,8 +27,8 @@ function loadWith(data) {
   return store;
 }
 
-test('schema version is 4', () => {
-  assert.equal(SCHEMA_VERSION, 4);
+test('schema version is 5', () => {
+  assert.equal(SCHEMA_VERSION, 5);
 });
 
 test('a v3 file gets stripWidth: null, so the strip keeps its old width', () => {

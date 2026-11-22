@@ -6,7 +6,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const SCHEMA_VERSION = 4;
+const { DEFAULT_DISPLAY, normalizeDisplay } = require('./display');
+
+const SCHEMA_VERSION = 5;
 
 /**
  * How many value samples the chart keeps.
@@ -68,6 +70,12 @@ function emptyState() {
       chart: true,
       // Minutes of history the chart shows.
       chartRange: 15,
+      // ---- what is shown ----
+      // One key per thing that can be ticked on or off in the settings sheet.
+      // The shape and the defaults live in src/display.js; this is only the
+      // stored copy. Everything defaults to on, which is what every earlier
+      // version showed, so an upgrade changes nothing until the user unticks.
+      display: { ...DEFAULT_DISPLAY },
     },
   };
 }
@@ -128,6 +136,17 @@ class Store {
      */
     const sw = Number(settings.stripWidth);
     settings.stripWidth = Number.isFinite(sw) && sw > 0 ? Math.round(sw) : null;
+
+    /**
+     * v4 -> v5: the user can choose what is shown.
+     *
+     * A file written before this has no `display` at all. `normalizeDisplay`
+     * turns that into "everything on", which is exactly what v4 drew — so an
+     * existing install looks identical after the upgrade. It also drops keys
+     * this version does not know, so a file from a future build cannot leave
+     * the renderer asking about a toggle that no longer exists.
+     */
+    settings.display = normalizeDisplay(settings.display);
 
     const history = Array.isArray(parsed.history)
       ? parsed.history
@@ -251,7 +270,15 @@ class Store {
   }
 
   patchSettings(patch) {
-    this.state.settings = { ...this.state.settings, ...patch };
+    const p = { ...(patch || {}) };
+    // `display` is a nested record, so a shallow spread would replace the whole
+    // thing and silently drop every key the caller did not mention. It is
+    // merged through the same normaliser the loader uses, so a partial patch
+    // and a hand-edited file behave identically.
+    if (p.display !== undefined) {
+      p.display = normalizeDisplay({ ...this.state.settings.display, ...(p.display || {}) });
+    }
+    this.state.settings = { ...this.state.settings, ...p };
     this.saveDebounced();
     return this.state.settings;
   }

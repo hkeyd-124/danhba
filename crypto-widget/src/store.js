@@ -9,8 +9,9 @@ const path = require('path');
 const {
   DEFAULT_DISPLAY, normalizeDisplay, normalizeStripCoins,
 } = require('./display');
+const { DEFAULT_INTERVAL, normalizeInterval } = require('./klines');
 
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 /**
  * How many value samples the chart keeps.
@@ -72,6 +73,12 @@ function emptyState() {
       chart: true,
       // Minutes of history the chart shows.
       chartRange: 15,
+      // ---- per-coin candlestick chart ----
+      // The frame the coin charts are drawn in: '5m' | '15m' | '1h' | '4h' | '1d'.
+      // One setting for every coin, not one per coin: the charts sit in a list
+      // and are read as a column, so two rows on different frames would be
+      // comparing different windows without saying so.
+      candleInterval: DEFAULT_INTERVAL,
       // ---- what is shown ----
       // One key per thing that can be ticked on or off in the settings sheet.
       // The shape and the defaults live in src/display.js; this is only the
@@ -164,6 +171,18 @@ class Store {
      * ticker, so a hand-edited file cannot put a nameless row in the strip.
      */
     settings.stripCoins = normalizeStripCoins(settings.stripCoins);
+
+    /**
+     * v6 -> v7: the coin chart became a candlestick with a selectable frame.
+     *
+     * A file written before this has no `candleInterval`. `normalizeInterval`
+     * turns that into '15m', which is the frame the old line chart was built
+     * from — so an existing install keeps the same window it was already
+     * looking at, and only the drawing changes. An unknown token (a hand-edited
+     * file, or a frame a future build added) also falls back here rather than
+     * being sent to the exchange, where it would be a 400.
+     */
+    settings.candleInterval = normalizeInterval(settings.candleInterval);
 
     const history = Array.isArray(parsed.history)
       ? parsed.history

@@ -496,13 +496,13 @@ function refreshSymbols() {
  * cache decides what is actually stale, so calling this often is cheap: a
  * fresh series is not refetched.
  *
- * Failures are swallowed on purpose. A missing sparkline is a cosmetic gap;
+ * Failures are swallowed on purpose. A missing chart is a cosmetic gap;
  * an unhandled rejection here would take down the whole widget.
  */
-async function loadKlines(symbols) {
+async function loadKlines(symbols, opts = {}) {
   if (!klines) return;
   try {
-    const changed = await klines.load(symbols);
+    const changed = await klines.load(symbols, opts);
     if (changed.length) send('klines', klines.snapshot());
   } catch (err) {
     if (process.env.CPW_DEBUG) console.error('[klines]', err.message);
@@ -1162,6 +1162,25 @@ function registerIpc() {
       allowed.chartRange = Math.min(60, Math.max(5, Math.round(p.chartRange)));
     }
     /**
+     * The candlestick frame.
+     *
+     * Handled before the generic merge because it has a side effect: the cache
+     * has to switch frames and refetch, and the renderer has to be told. The
+     * store normalises the token, so an unknown one can never reach the
+     * exchange as a 400.
+     */
+    if (typeof p.candleInterval === 'string') {
+      store.patchSettings({ candleInterval: p.candleInterval });
+      const iv = store.settings.candleInterval;
+      if (klines && klines.useInterval(iv)) {
+        // Force: the new frame has no series yet, and `load` would otherwise
+        // consider a stale entry for this symbol fresh and skip it.
+        loadKlines(symbolsInUse(store.trades), { force: true });
+      }
+      pushState();
+      return { ok: true, settings: store.settings, interval: iv };
+    }
+    /**
      * What is shown. The renderer sends one key at a time (a checkbox click),
      * so the patch is merged into the stored record rather than replacing it —
      * `store.patchSettings` does that merge through `normalizeDisplay`, which
@@ -1363,6 +1382,9 @@ app.whenReady().then(() => {
   engine = new AlertEngine();
   klines = new KlineCache({
     base: process.env.CPW_KLINES_BASE || undefined,
+    // The frame the user last chose. Read from the store, not hard-coded, so a
+    // restart comes back on the same frame instead of resetting to 15m.
+    interval: store.settings.candleInterval,
   });
 
   feed.on('price', ({ symbol, price }) => {

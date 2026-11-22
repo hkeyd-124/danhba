@@ -1,0 +1,8 @@
+<!DOCTYPE hdoctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>placeholder</title>
+</head>
+<body></body>
+</html>

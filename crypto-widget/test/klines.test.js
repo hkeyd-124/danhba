@@ -14,7 +14,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const http = require('http');
 const {
-  KlineCache, parseKlines, closesOf, summarize,
+  KlineCache, parseKlines, summarize,
   DEFAULT_INTERVAL, DEFAULT_LIMIT,
 } = require('../src/klines');
 
@@ -66,16 +66,17 @@ test('parseKlines drops junk instead of coercing it to zero', () => {
     row(1000, 10, 12, 9, 11),
     null,
     'nope',
-    [1, 2],                       // too short
-    row(2000, 10, 12, 9, 0),      // close of 0 is a missing field
-    row(3000, 10, 12, 9, 'abc'),  // not a number
-    row(4000, 10, 12, 9, 13),
+    [1, 2],                          // too short
+    row(2000, 10, 12, 9, 0),         // close of 0 is a missing field
+    row(3000, 10, 12, 9, 'abc'),     // not a number
+    row(4000, 10, 8, 9, 13),         // high below low
+    row(5000, 10, 12, 9, 13),
   ];
   const out = parseKlines(rows);
   assert.deepEqual(out.map((c) => c.c), [11, 13], 'only the two usable candles survive');
 });
 
-test('parseKlines sorts by time so the line always runs left to right', () => {
+test('parseKlines sorts by time so the chart always runs left to right', () => {
   const out = parseKlines([row(3000, 1, 1, 1, 3), row(1000, 1, 1, 1, 1), row(2000, 1, 1, 1, 2)]);
   assert.deepEqual(out.map((c) => c.t), [1000, 2000, 3000]);
 });
@@ -86,30 +87,36 @@ test('parseKlines on a non-array is empty, not a throw', () => {
   assert.deepEqual(parseKlines({ error: 'x' }), []);
 });
 
-test('closesOf keeps only usable closes', () => {
-  const candles = [{ c: 5 }, { c: 0 }, { c: null }, { c: 7 }, {}];
-  assert.deepEqual(closesOf(candles), [5, 7]);
-});
-
 test('summarize measures the change across the whole window', () => {
-  const s = summarize([100, 110, 120]);
+  const candles = parseKlines([
+    row(1000, 100, 101, 99, 100),
+    row(2000, 100, 111, 99, 110),
+    row(3000, 110, 121, 109, 120),
+  ]);
+  const s = summarize(candles, '15m');
   assert.equal(s.first, 100);
   assert.equal(s.last, 120);
   assert.equal(s.change, 20);
   assert.equal(s.changePct, 20);
   assert.equal(s.direction, 'up');
+  assert.equal(s.interval, '15m');
 });
 
 test('summarize is null when there is nothing to draw', () => {
   assert.equal(summarize([]), null);
-  assert.equal(summarize([0, 0]), null);
   assert.equal(summarize(null), null);
+  assert.equal(summarize(undefined), null);
 });
 
 test('summarize calls a flat series flat, not up', () => {
-  const s = summarize([50, 50, 50]);
+  const s = summarize(parseKlines([row(1000, 50, 50, 50, 50), row(2000, 50, 50, 50, 50)]), '5m');
   assert.equal(s.direction, 'flat');
   assert.equal(s.change, 0);
+});
+
+test('summarize falls back to the default frame for an unknown token', () => {
+  const s = summarize(parseKlines([row(1000, 1, 1, 1, 1)]), '7m');
+  assert.equal(s.interval, DEFAULT_INTERVAL);
 });
 
 test('the request is the documented endpoint with the documented parameters', async () => {
@@ -119,14 +126,17 @@ test('the request is the documented endpoint with the documented parameters', as
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify([row(1000, 10, 12, 9, 11), row(2000, 11, 13, 10, 12)]));
   });
-  const cache = new KlineCache({ base: mock.base });
-  await cache.load(['BTCUSDT']);
+  try {
+    const cache = new KlineCache({ base: mock.base });
+    await cache.load(['BTCUSDT']);
 
-  assert.match(seen, /^\/fapi\/v1\/klines\?/);
-  assert.match(seen, /symbol=BTCUSDT/);
-  assert.match(seen, new RegExp(`interval=${DEFAULT_INTERVAL}`));
-  assert.match(seen, new RegExp(`limit=${DEFAULT_LIMIT}`));
-  await mock.close();
+    assert.match(seen, /^\/fapi\/v1\/klines\?/);
+    assert.match(seen, /symbol=BTCUSDT/);
+    assert.match(seen, new RegExp(`interval=${DEFAULT_INTERVAL}`));
+    assert.match(seen, new RegExp(`limit=${DEFAULT_LIMIT}`));
+  } finally {
+    await mock.close();
+  }
 });
 
 test('a series is fetched once, then served from the cache', async () => {
@@ -136,17 +146,20 @@ test('a series is fetched once, then served from the cache', async () => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify([row(1000, 10, 12, 9, 11), row(2000, 11, 13, 10, 12)]));
   });
-  const cache = new KlineCache({ base: mock.base });
-  await cache.load(['BTCUSDT']);
-  await cache.load(['BTCUSDT']);
-  await cache.load(['BTCUSDT']);
-  assert.equal(hits, 1, 'three loads, one request');
+  try {
+    const cache = new KlineCache({ base: mock.base });
+    await cache.load(['BTCUSDT']);
+    await cache.load(['BTCUSDT']);
+    await cache.load(['BTCUSDT']);
+    assert.equal(hits, 1, 'three loads, one request');
 
-  // Past the TTL it refetches.
-  const later = new KlineCache({ base: mock.base, now: () => Date.now() + 10 * 60 * 1000 });
-  await later.load(['BTCUSDT']);
-  assert.equal(hits, 2);
-  await mock.close();
+    // Past the TTL it refetches.
+    const later = new KlineCache({ base: mock.base, now: () => Date.now() + 10 * 60 * 1000 });
+    await later.load(['BTCUSDT']);
+    assert.equal(hits, 2);
+  } finally {
+    await mock.close();
+  }
 });
 
 test('a failed refresh keeps the previous series instead of blanking it', async () => {
@@ -156,16 +169,19 @@ test('a failed refresh keeps the previous series instead of blanking it', async 
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify([row(1000, 10, 12, 9, 11), row(2000, 11, 13, 10, 12)]));
   });
-  const cache = new KlineCache({ base: mock.base, ttlMs: 0 });
-  await cache.load(['BTCUSDT']);
-  const before = cache.get('BTCUSDT');
-  assert.ok(before, 'first load stored a series');
+  try {
+    const cache = new KlineCache({ base: mock.base, ttlMs: 0 });
+    await cache.load(['BTCUSDT']);
+    const before = cache.get('BTCUSDT');
+    assert.ok(before, 'first load stored a series');
 
-  fail = true;
-  const changed = await cache.load(['BTCUSDT'], { force: true });
-  assert.deepEqual(changed, [], 'a failed refresh reports no change');
-  assert.deepEqual(cache.get('BTCUSDT'), before, 'the old series is still there');
-  await mock.close();
+    fail = true;
+    const changed = await cache.load(['BTCUSDT'], { force: true });
+    assert.deepEqual(changed, [], 'a failed refresh reports no change');
+    assert.deepEqual(cache.get('BTCUSDT'), before, 'the old series is still there');
+  } finally {
+    await mock.close();
+  }
 });
 
 test('a network error is swallowed, not thrown at the caller', async () => {
@@ -183,13 +199,16 @@ test('prune drops coins that are no longer held', async () => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify([row(1000, 10, 12, 9, 11), row(2000, 11, 13, 10, 12)]));
   });
-  const cache = new KlineCache({ base: mock.base });
-  await cache.load(['BTCUSDT', 'ETHUSDT']);
-  assert.deepEqual(Object.keys(cache.snapshot()).sort(), ['BTCUSDT', 'ETHUSDT']);
+  try {
+    const cache = new KlineCache({ base: mock.base });
+    await cache.load(['BTCUSDT', 'ETHUSDT']);
+    assert.deepEqual(Object.keys(cache.snapshot().series).sort(), ['BTCUSDT', 'ETHUSDT']);
 
-  cache.prune(['BTCUSDT']);
-  assert.deepEqual(Object.keys(cache.snapshot()), ['BTCUSDT']);
-  await mock.close();
+    cache.prune(['BTCUSDT']);
+    assert.deepEqual(Object.keys(cache.snapshot().series), ['BTCUSDT']);
+  } finally {
+    await mock.close();
+  }
 });
 
 test('symbols are normalised and de-duplicated before fetching', async () => {
@@ -218,10 +237,53 @@ test('stop() makes further loads a no-op', async () => {
     hits += 1;
     res.writeHead(200); res.end('[]');
   });
-  const cache = new KlineCache({ base: mock.base });
-  cache.stop();
-  const changed = await cache.load(['BTCUSDT']);
-  assert.deepEqual(changed, []);
-  assert.equal(hits, 0);
-  await mock.close();
+  try {
+    const cache = new KlineCache({ base: mock.base });
+    cache.stop();
+    const changed = await cache.load(['BTCUSDT']);
+    assert.deepEqual(changed, []);
+    assert.equal(hits, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
+test('switching frames keeps the old series and reports the change', async () => {
+  const mock = await mockServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify([row(1000, 10, 12, 9, 11), row(2000, 11, 13, 10, 12)]));
+  });
+  try {
+    const cache = new KlineCache({ base: mock.base });
+    await cache.load(['BTCUSDT']);
+    assert.equal(cache.useInterval('1h'), true);
+    assert.equal(cache.useInterval('1h'), false, 'the same frame is not a change');
+    // The 15m series is still in memory, so flipping back is instant.
+    assert.equal(cache.useInterval('15m'), true);
+    assert.ok(cache.get('BTCUSDT'), 'the 15m series survived the round trip');
+  } finally {
+    await mock.close();
+  }
+});
+
+test('a response that lands after a frame switch is dropped', async () => {
+  // A 5m request that lands after the user switched to 1d would store 5m
+  // candles under a key the renderer reads as 1d.
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const cache = new KlineCache({
+    base: 'http://example.invalid/fapi/v1/klines',
+    fetch: async () => {
+      await gate;
+      return {
+        ok: true,
+        json: async () => [row(1000, 10, 12, 9, 11), row(2000, 11, 13, 10, 12)],
+      };
+    },
+  });
+  const pending = cache.load(['BTCUSDT']);
+  cache.useInterval('1d');
+  release();
+  await pending;
+  assert.equal(cache.get('BTCUSDT'), null, 'the stale frame was not stored');
 });

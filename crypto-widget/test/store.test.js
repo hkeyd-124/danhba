@@ -4,8 +4,13 @@
  *
  * The rule these protect: a data file written by an older version must keep
  * behaving exactly as it did. Adding the 'touch' alert kind must not silently
- * turn an existing "vượt lên trên" alert into something else, and must not
+ * turn an existing "v\u01b0\u1ee3t l\u00ean tr\u00ean" alert into something else, and must not
  * attach a tolerance to a kind that ignores it.
+ *
+ * The same rule now covers the candle frame: a file written before the coin
+ * chart became a candlestick has no `candleInterval`, and it must come back as
+ * the frame the old line chart was already built from \u2014 not as a 400 sent to
+ * the exchange.
  */
 const test = require('node:test');
 const assert = require('node:assert');
@@ -13,6 +18,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { Store, SCHEMA_VERSION } = require('../src/store');
+const { DEFAULT_INTERVAL } = require('../src/klines');
 
 function tmpFile() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cpw-store-'));
@@ -27,13 +33,13 @@ function loadWith(data) {
   return store;
 }
 
-test('schema version is 6', () => {
-  assert.equal(SCHEMA_VERSION, 6);
+test('schema version is 7', () => {
+  assert.equal(SCHEMA_VERSION, 7);
 });
 
 test('a v5 file gets stripCoins: [], so the strip draws the summary alone', () => {
   // v5 had no per-coin rows. An empty list means "summary line only", which is
-  // exactly what v5 drew — so an upgrade changes nothing until the user ticks
+  // exactly what v5 drew \u2014 so an upgrade changes nothing until the user ticks
   // a coin.
   const store = loadWith({ version: 5, settings: { dockMode: 'taskbar' } });
   assert.deepEqual(store.settings.stripCoins, []);
@@ -60,7 +66,7 @@ test('stripCoins is de-duplicated and capped', () => {
 
 test('a v3 file gets stripWidth: null, so the strip keeps its old width', () => {
   // v3 had one width for both the panel and the strip. Leaving stripWidth null
-  // makes the strip fall back to dockWidth — exactly what v3 drew — so an
+  // makes the strip fall back to dockWidth \u2014 exactly what v3 drew \u2014 so an
   // existing install looks unchanged until the user drags the strip.
   const store = loadWith({ version: 3, settings: { dockMode: 'taskbar', dockWidth: 420 } });
   assert.equal(store.settings.stripWidth, null);
@@ -155,4 +161,74 @@ test('settings from an older file survive the migration', () => {
   assert.equal(store.settings.textColor, '#ff0000');
   assert.equal(store.settings.dockMode, 'taskbar');
   assert.equal(store.settings.chart, false);
+});
+
+test('a v6 file gets the default candle frame, not a 400', () => {
+  // v6 drew a line chart built from 15m candles. Coming back as 15m means the
+  // window the user was already looking at is unchanged and only the drawing
+  // differs.
+  const store = loadWith({ version: 6, settings: { theme: 'solid' } });
+  assert.equal(store.settings.candleInterval, DEFAULT_INTERVAL);
+  assert.equal(store.settings.candleInterval, '15m');
+});
+
+test('a saved candle frame survives a reload', () => {
+  const store = loadWith({ version: 7, settings: { candleInterval: '4h' } });
+  assert.equal(store.settings.candleInterval, '4h');
+});
+
+test('an unknown candle frame falls back instead of reaching the exchange', () => {
+  // A hand-edited file, or a frame a future build added. Sending it would be a
+  // 400 and the chart would stay blank.
+  assert.equal(loadWith({ version: 7, settings: { candleInterval: '7m' } }).settings.candleInterval, '15m');
+  assert.equal(loadWith({ version: 7, settings: { candleInterval: 42 } }).settings.candleInterval, '15m');
+  assert.equal(loadWith({ version: 7, settings: { candleInterval: null } }).settings.candleInterval, '15m');
+});
+
+test('every offered frame is accepted', () => {
+  for (const iv of ['5m', '15m', '1h', '4h', '1d']) {
+    assert.equal(loadWith({ version: 7, settings: { candleInterval: iv } }).settings.candleInterval, iv);
+  }
+});
+
+test('patchSettings normalises a candle frame the same way the loader does', () => {
+  const store = loadWith({ version: 7, settings: {} });
+  store.patchSettings({ candleInterval: '1h' });
+  assert.equal(store.settings.candleInterval, '1h');
+  store.patchSettings({ candleInterval: 'nonsense' });
+  assert.equal(store.settings.candleInterval, '15m');
+});
+
+test('patchSettings merges display instead of replacing it', () => {
+  // A shallow spread would drop every key the caller did not mention.
+  const store = loadWith({ version: 7, settings: {} });
+  const before = { ...store.settings.display };
+  store.patchSettings({ display: { list: false } });
+  assert.equal(store.settings.display.list, false);
+  for (const key of Object.keys(before)) {
+    if (key === 'list') continue;
+    assert.equal(store.settings.display[key], before[key], `${key} must survive a partial patch`);
+  }
+});
+
+test('history keeps only finite positive samples and is capped', () => {
+  const store = loadWith({ version: 7, history: [{ t: 1, v: 10 }, { t: 2, v: 0 }, { t: 3, v: 'x' }, { t: 4, v: 20 }] });
+  assert.deepEqual(store.history, [{ t: 1, v: 10 }, { t: 4, v: 20 }]);
+});
+
+test('pushHistory refuses a non-positive value and respects the minimum gap', () => {
+  const store = loadWith({ version: 7 });
+  assert.equal(store.pushHistory(1000, 0), false);
+  assert.equal(store.pushHistory(1000, 10), true);
+  assert.equal(store.pushHistory(2000, 11), false, 'too soon after the last sample');
+  assert.equal(store.pushHistory(9000, 12), true);
+  assert.equal(store.history.length, 2);
+});
+
+test('pushHistory with force records a discontinuous step', () => {
+  // A trade was added or deleted: the chart must not interpolate across it.
+  const store = loadWith({ version: 7 });
+  store.pushHistory(1000, 10);
+  assert.equal(store.pushHistory(2000, 20, { force: true }), true);
+  assert.equal(store.history.length, 2);
 });

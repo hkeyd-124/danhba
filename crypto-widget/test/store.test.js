@@ -27,8 +27,35 @@ function loadWith(data) {
   return store;
 }
 
-test('schema version is 5', () => {
-  assert.equal(SCHEMA_VERSION, 5);
+test('schema version is 6', () => {
+  assert.equal(SCHEMA_VERSION, 6);
+});
+
+test('a v5 file gets stripCoins: [], so the strip draws the summary alone', () => {
+  // v5 had no per-coin rows. An empty list means "summary line only", which is
+  // exactly what v5 drew — so an upgrade changes nothing until the user ticks
+  // a coin.
+  const store = loadWith({ version: 5, settings: { dockMode: 'taskbar' } });
+  assert.deepEqual(store.settings.stripCoins, []);
+});
+
+test('stripCoins drops anything that is not a plausible ticker', () => {
+  // The list is written by the renderer, so it is normalised on the way in:
+  // a hand-edited file must not be able to put a nameless row in the strip.
+  const store = loadWith({
+    version: 6,
+    settings: { stripCoins: ['eth', 'LDO', '', 'TOOLONGTICKER', 42, null, 'btc'] },
+  });
+  assert.deepEqual(store.settings.stripCoins, ['ETH', 'LDO', 'BTC']);
+});
+
+test('stripCoins is de-duplicated and capped', () => {
+  // Two characters minimum: a one-letter ticker is not a coin, and the
+  // normaliser rejects it (see the test above).
+  const many = ['AA', 'BB', 'CC', 'DD', 'EE', 'FF', 'GG', 'HH', 'II', 'JJ', 'KK', 'LL'];
+  const store = loadWith({ version: 6, settings: { stripCoins: [...many, 'AA'] } });
+  assert.equal(store.settings.stripCoins.length, 8);
+  assert.equal(new Set(store.settings.stripCoins).size, 8);
 });
 
 test('a v3 file gets stripWidth: null, so the strip keeps its old width', () => {

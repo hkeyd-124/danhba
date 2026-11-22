@@ -6,9 +6,11 @@
 const fs = require('fs');
 const path = require('path');
 
-const { DEFAULT_DISPLAY, normalizeDisplay } = require('./display');
+const {
+  DEFAULT_DISPLAY, normalizeDisplay, normalizeStripCoins,
+} = require('./display');
 
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 /**
  * How many value samples the chart keeps.
@@ -76,6 +78,11 @@ function emptyState() {
       // stored copy. Everything defaults to on, which is what every earlier
       // version showed, so an upgrade changes nothing until the user unticks.
       display: { ...DEFAULT_DISPLAY },
+      // Per-coin rows in the collapsed strip: the base symbols the user ticked,
+      // e.g. ['LDO', 'ETH']. Empty means "the summary line only", which is
+      // exactly what every earlier version drew — so an upgrade changes nothing
+      // until the user ticks a coin.
+      stripCoins: [],
     },
   };
 }
@@ -147,6 +154,16 @@ class Store {
      * the renderer asking about a toggle that no longer exists.
      */
     settings.display = normalizeDisplay(settings.display);
+
+    /**
+     * v5 -> v6: the strip can follow individual coins.
+     *
+     * A file written before this has no `stripCoins`, and `normalizeStripCoins`
+     * turns that into an empty list — the strip draws the summary line alone,
+     * which is what v5 drew. It also drops anything that is not a plausible
+     * ticker, so a hand-edited file cannot put a nameless row in the strip.
+     */
+    settings.stripCoins = normalizeStripCoins(settings.stripCoins);
 
     const history = Array.isArray(parsed.history)
       ? parsed.history
@@ -277,6 +294,12 @@ class Store {
     // and a hand-edited file behave identically.
     if (p.display !== undefined) {
       p.display = normalizeDisplay({ ...this.state.settings.display, ...(p.display || {}) });
+    }
+    // `stripCoins` is a list, so a partial patch must replace it wholesale —
+    // there is no meaningful merge between two selections. It still goes
+    // through the normaliser, so the renderer cannot store junk.
+    if (p.stripCoins !== undefined) {
+      p.stripCoins = normalizeStripCoins(p.stripCoins);
     }
     this.state.settings = { ...this.state.settings, ...p };
     this.saveDebounced();

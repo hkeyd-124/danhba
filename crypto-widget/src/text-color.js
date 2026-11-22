@@ -178,14 +178,37 @@ function haloFor(textColor) {
 /**
  * Judge a text colour against a theme.
  *
+ * @param {string} textColor
+ * @param {string} theme
+ * @param {number} [bgAlpha] the theme's own opacity, 0..1
  * @returns {{ratio: number|null, level: 'good'|'ok'|'poor'|'unknown', message: string}}
  *
  * `ratio` is null on 'bare', where the background is the user's wallpaper and
  * no honest number can be produced. Saying "unknown" is the correct answer
  * there; inventing a ratio against a guessed wallpaper would be worse than
  * useless, because the user would trust it.
+ *
+ * ---------------------------------------------------------------------------
+ * The same is true of a see-through theme at low opacity
+ *
+ * 'clear' and 'glass' paint a translucent fill, and the opacity slider goes
+ * down to 0. At 0.35 the surface behind the text is mostly the wallpaper, not
+ * `#0a0e16` — so measuring against the theme's nominal colour produced a
+ * confident "16.5:1" for text that might be sitting on a white photo. That is
+ * the exact failure this readout exists to prevent, and it was reachable by
+ * dragging one slider.
+ *
+ * Below SEE_THROUGH_ALPHA the answer becomes "unknown", with a message that
+ * says why and what to do about it. Above it the theme's own colour dominates
+ * enough that the number is meaningful, and it is reported as before.
+ * ---------------------------------------------------------------------------
  */
-function judge(textColor, theme) {
+const SEE_THROUGH_ALPHA = 0.6;
+
+/** Themes whose fill is translucent, so the wallpaper shows through. */
+const SEE_THROUGH_THEMES = Object.freeze(['clear', 'glass']);
+
+function judge(textColor, theme, bgAlpha) {
   const text = normalizeHex(textColor) || DEFAULT_TEXT;
   const surface = THEME_SURFACE[theme] === undefined ? THEME_SURFACE.solid : THEME_SURFACE[theme];
 
@@ -194,6 +217,22 @@ function judge(textColor, theme) {
       ratio: null,
       level: 'unknown',
       message: 'Nền trong suốt — không đo được tương phản. Dùng “Quầng chữ” nếu chữ bị chìm.',
+    };
+  }
+
+  /**
+   * A translucent theme at low opacity is the same situation as 'bare': the
+   * thing behind the glyphs is the wallpaper, and no number can be honest
+   * about it. Only checked when an alpha is supplied, so a caller that does
+   * not know the opacity (the unit tests, an older payload) keeps the old
+   * behaviour instead of silently losing its readout.
+   */
+  const alpha = Number(bgAlpha);
+  if (SEE_THROUGH_THEMES.includes(theme) && Number.isFinite(alpha) && alpha < SEE_THROUGH_ALPHA) {
+    return {
+      ratio: null,
+      level: 'unknown',
+      message: `Nền đang trong suốt ${Math.round(alpha * 100)}% — hình nền lộ qua nên không đo được tương phản. Tăng độ đục hoặc dùng “Quầng chữ”.`,
     };
   }
 

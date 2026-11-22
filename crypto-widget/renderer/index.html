@@ -13,7 +13,6 @@
 <div class="widget" id="widget" data-theme="solid">
 
   <!-- ============ auto-hiding title bar ============ -->
-  <div class="tb-zone" id="tbZone" aria-hidden="true"></div>
   <header class="titlebar" id="titlebar">
     <div class="tb-drag"></div>
     <div class="winbtns">
@@ -26,7 +25,7 @@
   <!-- ============ collapsed summary (also the docked taskbar strip) ============ -->
   <section class="collapsed-view" id="collapsedView" hidden role="button" tabindex="0"
            title="Bấm để mở rộng">
-    <div class="cv-left">
+    <div class="cv-left" id="cvLeft">
       <div class="cv-label">Tổng giá trị</div>
       <div class="cv-value" id="cvValue">—</div>
     </div>
@@ -40,13 +39,13 @@
   <div class="body" id="body">
 
     <section class="hero">
-      <div class="hero-label">
+      <div class="hero-label" id="heroLabel">
         <span class="dot" id="feedDot" data-status="idle"></span>
         <span>Tổng giá trị danh mục</span>
         <span class="hero-status" id="feedLabel">đang kết nối…</span>
       </div>
       <div class="hero-value" id="totalValue">—</div>
-      <div class="hero-row">
+      <div class="hero-row" id="heroRow">
         <span class="pill" id="totalPnl">—</span>
         <span class="pill pill-ghost" id="totalPct">—</span>
         <span class="hero-meta" id="posCount"></span>
@@ -99,6 +98,16 @@
         <div class="empty-ico">📊</div>
         <p>Chưa có lệnh nào.</p>
         <p class="muted">Thêm lệnh mua đầu tiên để bắt đầu theo dõi.</p>
+      </div>
+      <!--
+        Shown only when every block in the panel has been switched off. An
+        empty panel with no explanation reads as a bug, so it says what
+        happened and where the switches are.
+      -->
+      <div class="empty empty-notice" id="emptyNotice" hidden>
+        <div class="empty-ico">👁</div>
+        <p>Đang ẩn hết nội dung.</p>
+        <p class="muted">Mở ⚙ → “Hiển thị” để bật lại từng mục.</p>
       </div>
     </section>
 
@@ -178,17 +187,28 @@
       <div class="field">
         <span>Màu chữ</span>
         <div class="swatches" id="colorGrid">
-          <button type="button" class="swatch" data-color="#e8eefc" style="--c:#e8eefc" title="Trắng"></button>
-          <button type="button" class="swatch" data-color="#ffffff" style="--c:#ffffff" title="Trắng tinh"></button>
-          <button type="button" class="swatch" data-color="#cfe0ff" style="--c:#cfe0ff" title="Xanh nhạt"></button>
-          <button type="button" class="swatch" data-color="#a7f3d0" style="--c:#a7f3d0" title="Mint"></button>
-          <button type="button" class="swatch" data-color="#fde68a" style="--c:#fde68a" title="Vàng"></button>
-          <button type="button" class="swatch" data-color="#fbcfe8" style="--c:#fbcfe8" title="Hồng"></button>
-          <button type="button" class="swatch" data-color="#1f2937" style="--c:#1f2937" title="Than"></button>
+          <button type="button" class="swatch" data-color="#e8eefc" data-c="#e8eefc" title="Trắng"></button>
+          <button type="button" class="swatch" data-color="#ffffff" data-c="#ffffff" title="Trắng tinh"></button>
+          <button type="button" class="swatch" data-color="#cfe0ff" data-c="#cfe0ff" title="Xanh nhạt"></button>
+          <button type="button" class="swatch" data-color="#a7f3d0" data-c="#a7f3d0" title="Mint"></button>
+          <button type="button" class="swatch" data-color="#fde68a" data-c="#fde68a" title="Vàng"></button>
+          <button type="button" class="swatch" data-color="#fbcfe8" data-c="#fbcfe8" title="Hồng"></button>
+          <button type="button" class="swatch" data-color="#1f2937" data-c="#1f2937" title="Than"></button>
           <label class="swatch swatch-custom" title="Màu tuỳ chọn">
             <input type="color" id="colorPick" value="#e8eefc" />
           </label>
         </div>
+
+        <!--
+          The contrast readout. The old picker let the user choose a colour that
+          made the widget unreadable and said nothing at all; this measures the
+          choice against the surface the theme actually paints.
+        -->
+        <div class="contrast-row">
+          <span class="contrast-chip" id="contrastChip" data-level="unknown">—</span>
+          <em class="hint" id="contrastHint">—</em>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" id="btnResetColor">Màu mặc định cho nền này</button>
       </div>
 
       <div class="field">
@@ -198,7 +218,7 @@
           <button type="button" class="seg-btn" data-dock="edge">Sát taskbar</button>
           <button type="button" class="seg-btn" data-dock="taskbar">Trong taskbar</button>
         </div>
-        <em class="hint" id="dockHint">“Trong taskbar”: dải nằm cùng hàng với các icon trên thanh taskbar, chỉ hiện tổng giá trị. Bấm vào để bung ra, bấm ra ngoài để thu lại.</em>
+        <em class="hint" id="dockHint">Cửa sổ nổi tự do: kéo thanh tiêu đề để di chuyển, kéo viền để đổi kích thước.</em>
       </div>
 
       <label class="field" id="blurField">
@@ -225,7 +245,7 @@
           <button type="button" class="seg-btn" data-chart="1">Bật</button>
           <button type="button" class="seg-btn" data-chart="0">Tắt</button>
         </div>
-        <div class="seg seg-3" id="rangeSeg" style="margin-top:6px">
+        <div class="seg seg-3 seg-gap" id="rangeSeg">
           <button type="button" class="seg-btn" data-range="5">5 phút</button>
           <button type="button" class="seg-btn" data-range="15">15 phút</button>
           <button type="button" class="seg-btn" data-range="60">1 giờ</button>
@@ -233,11 +253,42 @@
         <em class="hint">Biểu đồ giá trị danh mục theo thời gian, lấy mẫu mỗi 5 giây và lưu trên máy.</em>
       </div>
 
+      <!--
+        ============ what the panel shows ============
+        Every block is a switch of its own. The two groups are separate because
+        the collapsed strip is a different surface with different room: someone
+        who wants the total in the taskbar strip but not the percentage should
+        not have to lose the percentage in the full panel too.
+      -->
+      <div class="field">
+        <span>Hiển thị — bảng chi tiết</span>
+        <div class="display-grid" id="displayPanel">
+          <label class="check"><input type="checkbox" data-display="total" /><i></i><span>Tổng giá trị</span></label>
+          <label class="check"><input type="checkbox" data-display="pnl" /><i></i><span>Lãi/lỗ</span></label>
+          <label class="check"><input type="checkbox" data-display="pct" /><i></i><span>Phần trăm</span></label>
+          <label class="check"><input type="checkbox" data-display="positions" /><i></i><span>Số vị thế</span></label>
+          <label class="check"><input type="checkbox" data-display="list" /><i></i><span>Danh sách coin</span></label>
+          <label class="check"><input type="checkbox" data-display="alloc" /><i></i><span>Thanh tỉ trọng</span></label>
+          <label class="check"><input type="checkbox" data-display="icons" /><i></i><span>Icon coin</span></label>
+        </div>
+        <em class="hint" id="displayPanelHint">Bỏ tích để ẩn. Ít nhất một mục nên được bật, nếu không bảng sẽ trống.</em>
+      </div>
+
+      <div class="field">
+        <span>Hiển thị — dải thu gọn</span>
+        <div class="display-grid" id="displayStrip">
+          <label class="check"><input type="checkbox" data-display="stripTotal" /><i></i><span>Tổng giá trị</span></label>
+          <label class="check"><input type="checkbox" data-display="stripPnl" /><i></i><span>Lãi/lỗ</span></label>
+          <label class="check"><input type="checkbox" data-display="stripPct" /><i></i><span>Phần trăm</span></label>
+        </div>
+        <em class="hint" id="displayStripHint">Dải hẹp có thể tự ẩn bớt số cho vừa chỗ — đó là bố cục, không phải mất tuỳ chọn.</em>
+      </div>
+
       <div class="field">
         <span>Kích thước</span>
         <div class="size-row">
           <button type="button" class="btn btn-ghost btn-sm" id="btnResetSize">Về mặc định</button>
-          <em class="hint" style="margin:0">Kéo viền cửa sổ để đổi kích thước.</em>
+          <em class="hint hint-flat">Kéo viền cửa sổ để đổi kích thước.</em>
         </div>
       </div>
 

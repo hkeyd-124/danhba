@@ -624,11 +624,33 @@ function applyLook(s) {
    * is measured against the surface the theme paints, and on 'bare' it says
    * "unknown" rather than inventing a ratio against a wallpaper it cannot see.
    */
-  const judge = (tones && tones.judge) || { level: 'unknown', message: '—', ratio: null };
+  /*
+   * Three states, not two.
+   *
+   * `ratio === null` means "this theme has no surface to measure against" —
+   * true only for 'bare'. The old fallback reused that same null for "no tones
+   * yet", so a missing `tones` object made the chip claim the background was
+   * transparent on a solid theme: a false statement about the user's own
+   * setting, produced by a missing value rather than by the setting.
+   *
+   * This is reachable in the shipped app, not just in theory: `onCollapsed`
+   * calls renderSettings() directly, and the main process can emit a collapse
+   * event before the first full state payload has been handled. On that path
+   * `state.tones` is still null, and the chip used to read "nền trong suốt" on
+   * a solid theme. A missing value must read as "not measured yet", never as a
+   * claim about the theme.
+   */
+  const judge = tones && tones.judge ? tones.judge : null;
   const chip = $('contrastChip');
-  chip.dataset.level = judge.level;
-  chip.textContent = judge.ratio === null ? 'nền trong suốt' : `${judge.ratio}:1`;
-  $('contrastHint').textContent = judge.message;
+  if (!judge) {
+    chip.dataset.level = 'unknown';
+    chip.textContent = 'chưa đo';
+    $('contrastHint').textContent = 'Đang tải…';
+  } else {
+    chip.dataset.level = judge.level;
+    chip.textContent = judge.ratio === null ? 'nền trong suốt' : `${judge.ratio}:1`;
+    $('contrastHint').textContent = judge.message;
+  }
 }
 
 $('btnLook').addEventListener('click', () => openModal('lookModal'));

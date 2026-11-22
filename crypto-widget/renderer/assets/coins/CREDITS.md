@@ -1,42 +1,58 @@
-# Coin logos — provenance and licence
+# Coin logo credits
 
-These files are **vendored**, not fetched at runtime. The widget's security
-promise is that the only outbound connection is the Binance Futures price feed;
-downloading a logo from a CDN would break that promise for a decoration, so the
-logos ship with the app and are loaded from disk like any other asset.
+Every coin logo the widget can draw, where it came from, and under what licence.
+Nothing here is fetched at runtime — see "How they ship" below.
 
-Nothing here is fetched while the widget runs.
+## Where they come from
 
-## Sources
-
-| Source | Licence | Files | Format |
+| Source | Licence | Coins | Format as vendored |
 |---|---|---|---|
-| [spothq/cryptocurrency-icons](https://github.com/spothq/cryptocurrency-icons) | CC0-1.0 (public domain) | 43 | SVG |
-| [CoinCap](https://coincap.io) asset icons | Free to use, provided as-is | 34 | PNG |
+| [spothq/cryptocurrency-icons](https://github.com/spothq/cryptocurrency-icons) | CC0-1.0 (public domain dedication) | 43 | PNG, 24×24 |
+| [coincap.io](https://coincap.io) asset icons | Public asset set published by CoinCap | 34 | PNG, 24×24 |
 
-CC0 imposes no attribution requirement; the credit is here because it is the
-honest thing to do, and because the next person to add a coin needs to know
-where the existing ones came from.
+Both sets permit redistribution. CC0 imposes no conditions at all; CoinCap's
+icon set is published for use by third-party applications.
 
-## Adding a coin
+**Total: 77 coins.** A coin with no entry here keeps the drawn badge (a rounded
+square in the coin's brand colour with its ticker inside), which is what every
+version before this one drew.
 
-1. Drop the file in this directory, named `<ticker>.svg` or `<ticker>.png`
-   (lowercase, e.g. `ldo.png`).
-2. Add the ticker to `COIN_ICON` in `src/coin-icon.js`.
-3. Add a brand colour to `BRAND` in the same file — the allocation bar and the
-   ticker text use it, and a coin with a logo but no colour would render its
-   bar in a hash colour.
-4. Run `npm test`. `test/coin-icon.test.js` walks `COIN_ICON` and fails if a
-   listed file is missing or empty, so a typo cannot ship as a broken image.
+### The 43 from spothq
 
-A coin with no file here is not a problem: `badgeFor()` falls back to a drawn
-badge — a rounded square in the coin's brand colour with its ticker inside.
-That is what every version before this one drew, and it identifies the coin at
-a glance.
+`AAVE ADA ALGO ATOM AVAX BCH BNB BTC CHZ COMP CRV DASH DOGE DOT ENJ EOS ETC ETH
+FIL GRT ICP KSM LINK LTC MANA MATIC MKR NEO ONE QTUM SAND SNX SOL STX THETA TRX
+UNI VET XLM XMR XRP ZEC ZIL`
 
-## Why some coins are PNG
+### The 34 from CoinCap
 
-The spothq set predates most of the 2023-2025 listings, so coins like LDO,
-NEAR, SUI, TIA, ONDO and ENA are not in it. CoinCap covers them. Mixing the two
-formats is fine: `.coin-img` uses `object-fit: contain`, so a PNG with a little
-transparent margin renders at the same visual size as an SVG that fills its box.
+`APT ARB AXS BERA DYDX EIGEN ENA FET FLOW GALA HBAR HYPE IMX INJ JUP LDO NEAR
+ONDO OP PENGU POL PYTH RENDER RNDR RUNE SEI SHIB SUI TAO TIA TON VIRTUAL WIF
+WLD`
+
+## How they ship
+
+The logos are **not** stored as files here. They live in `src/coin-data.js` as
+base64 data URIs, and that module is what `src/coin-icon.js` reads.
+
+Two reasons, both structural:
+
+1. **The renderer is sandboxed.** It has no `require`, no `fs`, and cannot read
+   the disk, so the image bytes have to travel with the state the main process
+   pushes. A file path would be unusable there.
+2. **The CSP forbids everything else.** The page allows `img-src 'self' data:`
+   and nothing more, so a data URI is the only kind of image the widget can
+   paint — and it can never point off the machine.
+
+Nothing is downloaded while the widget runs. The only outbound connection the
+app ever makes is the Binance Futures price feed.
+
+## Why 24×24 PNG and not the original SVG
+
+The icons are drawn at 11px in the taskbar strip and 18px in the panel, so a
+24×24 raster is already more resolution than any of them will ever use, and it
+is a fraction of the size: the same 77 logos as SVG were 70KB of base64, as
+PNG they are 32KB. At these display sizes the two are indistinguishable, and
+the smaller module keeps the renderer's state payload lean.
+
+The SVGs were rasterised once, offline, when `coin-data.js` was generated. They
+are not rasterised at runtime.

@@ -78,6 +78,16 @@ function colorFor(sym) {
 /**
  * Coin badge markup.
  *
+ * Two shapes, decided by whether a real logo is vendored for the coin:
+ *
+ *   with a logo   <img class="coin coin-img" src="data:image/png;base64,...">
+ *   without       <span class="coin" data-coin="#...">LDO</span>
+ *
+ * The `src` is a data URI, not a path: the renderer is sandboxed and cannot
+ * read the disk, so the bytes travel with the state. The page's CSP allows
+ * `img-src 'self' data:` and nothing else, so this is the only kind of image
+ * the widget can paint — and it can never point off the machine.
+ *
  * ---------------------------------------------------------------------------
  * Why the colours are NOT written as a `style="..."` attribute
  *
@@ -100,9 +110,17 @@ function colorFor(sym) {
 function badgeHtml(symbol, size) {
   const b = (state.badges && state.badges[symbol]) || null;
   const color = b ? b.color : colorFor(symbol);
-  const ink = b ? b.ink : '#ffffff';
   const glyph = b ? b.glyph : baseOf(symbol).slice(0, 4);
+  const icon = b ? b.icon : null;
   const cls = size === 'sm' ? 'coin coin-sm' : 'coin';
+
+  if (icon) {
+    // `alt=""` because the ticker is always written next to the badge: naming
+    // the image too would make a screen reader say "Ethereum ETH".
+    return `<img class="${cls} coin-img" src="${esc(icon)}" alt="" aria-hidden="true" draggable="false" />`;
+  }
+
+  const ink = b ? b.ink : '#ffffff';
   return `<span class="${cls}" data-coin="${esc(color)}" data-coin-ink="${esc(ink)}" aria-hidden="true">${esc(glyph)}</span>`;
 }
 
@@ -213,6 +231,8 @@ function render() {
   cvPct.textContent = fmtPct(pct);
   cvPct.className = `cv-pct ${cls(pct)}`;
 
+  renderStripCoins();
+
   renderPositions();
   renderTrades();
   renderAlerts();
@@ -224,6 +244,72 @@ function render() {
   // The swatches live in the settings sheet, which is static markup, so their
   // colours are painted once here rather than on every list render.
   paintStyles(document);
+}
+
+/**
+ * The per-coin rows in the collapsed strip.
+ *
+ * ---------------------------------------------------------------------------
+ * What this is for
+ *
+ * The strip's summary line is the whole portfolio in one number. That is fine
+ * until the user wants to watch one coin: the total moves and there is no way
+ * to tell which holding did it. Ticking a coin in the settings sheet adds a
+ * row for it here — its own price and its own change — so the strip answers
+ * "what is LDO doing" without opening the panel.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the rows are rebuilt rather than updated in place
+ *
+ * The list is short (at most 8) and it changes only when the user ticks
+ * something or a coin is sold out. Rebuilding is a few string concatenations
+ * and it cannot drift out of sync with the selection; a diffing update would
+ * be more code for no measurable gain at this size.
+ *
+ * The rows are hidden entirely when nothing is selected, so the strip is
+ * byte-for-byte the same layout every earlier version drew.
+ */
+function renderStripCoins() {
+  const box = $('cvCoins');
+  if (!box) return;
+
+  const selected = (state.settings && state.settings.stripCoins) || [];
+  const positions = state.positions || [];
+
+  // A selected coin that is no longer held gets no row: after selling out,
+  // `qty` is 0 and a row reading "0.00" is noise. The selection is kept, so
+  // buying back in brings the row straight back without re-ticking it.
+  const byBase = new Map();
+  for (const p of positions) {
+    if (Number(p.qty) > 0) byBase.set(String(p.base || '').toUpperCase(), p);
+  }
+  const rows = [];
+  for (const base of selected) {
+    const p = byBase.get(String(base).toUpperCase());
+    if (p) rows.push(p);
+    if (rows.length >= 8) break;
+  }
+
+  if (!rows.length) {
+    box.hidden = true;
+    box.innerHTML = '';
+    return;
+  }
+  box.hidden = false;
+
+  box.innerHTML = rows.map((p) => {
+    const pnlCls = cls(p.unrealized);
+    const price = p.hasPrice ? fmtPrice(p.mark) : '—';
+    return `
+      <div class="cv-coin" data-symbol="${esc(p.symbol)}">
+        ${badgeHtml(p.symbol, 'sm')}
+        <span class="cv-coin-sym">${esc(p.base)}</span>
+        <span class="cv-coin-price">${price}</span>
+        <span class="cv-coin-pct ${pnlCls}">${fmtPct(p.pnlPct)}</span>
+      </div>`;
+  }).join('');
+
+  paintStyles(box);
 }
 
 function renderPositions() {
@@ -753,7 +839,104 @@ function syncDisplayChecks() {
   $('displayStripHint').textContent = anyStrip
     ? 'Dải hẹp có thể tự ẩn bớt số cho vừa chỗ — đó là bố cục, không phải mất tuỳ chọn.'
     : 'Đang tắt hết — dải trong taskbar sẽ trống. Tích lại ít nhất một mục.';
+
+  renderStripCoinChecks();
 }
+
+/**
+ * The per-coin tick list in the settings sheet.
+ *
+ * Built from the positions the user actually holds, so it is never a stale
+ * hard-coded list: buy a new coin and it appears here on the next render.
+ *
+ * A coin that is selected but no longer held still gets a row, marked as such.
+ * Dropping it silently would leave the user with a selection they cannot see
+ * or clear — the strip would show nothing for it and the sheet would not
+ * explain why.
+ */
+function renderStripCoinChecks() {
+  const box = $('stripCoins');
+  if (!box) return;
+
+  const selected = ((state.settings && state.settings.stripCoins) || [])
+    .map((s) => String(s).toUpperCase());
+  const positions = state.positions || [];
+
+  const held = [];
+  const seen = new Set();
+  for (const p of positions) {
+    const base = String(p.base || '').toUpperCase();
+    if (!base || seen.has(base)) continue;
+    seen.add(base);
+    held.push({ base, qty: Number(p.qty) || 0 });
+  }
+  // Selected-but-sold-out coins, so the tick can be cleared.
+  for (const base of selected) {
+    if (!seen.has(base)) { seen.add(base); held.push({ base, qty: 0 }); }
+  }
+
+  if (!held.length) {
+    box.innerHTML = '';
+    $('stripCoinsHint').textContent = 'Chưa có coin nào — thêm lệnh mua để chọn coin theo dõi.';
+    return;
+  }
+
+  box.innerHTML = held.map(({ base, qty }) => {
+    const on = selected.includes(base);
+    const gone = qty <= 0;
+    return `
+      <label class="check${gone ? ' is-gone' : ''}">
+        <input type="checkbox" data-strip-coin="${esc(base)}" ${on ? 'checked' : ''} />
+        <i></i><span>${esc(base)}${gone ? ' <em class="muted">(đã bán hết)</em>' : ''}</span>
+      </label>`;
+  }).join('');
+
+  const n = selected.length;
+  $('stripCoinsHint').textContent = n === 0
+    ? 'Tích để thêm một dòng giá của coin đó vào dải trong taskbar.'
+    : `Đang theo dõi ${n} coin trong dải. Dải trong taskbar chỉ đủ chỗ cho vài dòng — phần dư sẽ bị cắt bớt.`;
+}
+
+/**
+ * One delegated listener for the coin ticks.
+ *
+ * The whole selection is sent on every change rather than a delta: the list is
+ * at most 8 entries, and sending the complete list means the stored value can
+ * never be the result of a lost or reordered message.
+ *
+ * ---------------------------------------------------------------------------
+ * Why there is a local mirror
+ *
+ * `state.settings.stripCoins` only changes when the main process pushes the
+ * new state back, which is a round trip. Ticking two coins in quick succession
+ * therefore read the SAME stale list twice, and the second tick overwrote the
+ * first — the user ticked LDO and ETH and got only ETH. The e2e test caught
+ * this by ticking both in one go.
+ *
+ * `pendingStripCoins` is that mirror: it is updated synchronously on every
+ * click, so the second tick builds on the first. It is cleared as soon as the
+ * main process confirms, so the stored value stays the single source of truth
+ * and a rejected patch cannot leave the UI lying.
+ */
+let pendingStripCoins = null;
+
+function currentStripCoins() {
+  if (pendingStripCoins) return pendingStripCoins;
+  return ((state.settings && state.settings.stripCoins) || [])
+    .map((s) => String(s).toUpperCase());
+}
+
+$('stripCoins').addEventListener('change', (e) => {
+  const input = e.target.closest('input[data-strip-coin]');
+  if (!input) return;
+  const base = input.dataset.stripCoin;
+  const current = currentStripCoins();
+  const next = input.checked
+    ? [...current.filter((s) => s !== base), base]
+    : current.filter((s) => s !== base);
+  pendingStripCoins = next;
+  api.patchSettings({ stripCoins: next });
+});
 
 $('btnResetSize').addEventListener('click', () => {
   api.window('reset-size');
@@ -1150,6 +1333,14 @@ $('btnData').addEventListener('click', () => api.openDataFolder());
 // ------------------------------------------------------------------ IPC wiring
 api.onState((s) => {
   Object.assign(state, s);
+  /**
+   * The main process has confirmed the selection, so the local mirror is no
+   * longer needed. Clearing it here — rather than after a timeout — means the
+   * stored value is authoritative again the moment it arrives, and a patch
+   * that was rejected cannot leave the ticks showing something that was never
+   * saved.
+   */
+  pendingStripCoins = null;
   render();
 });
 /**

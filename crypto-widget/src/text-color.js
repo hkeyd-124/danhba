@@ -199,10 +199,18 @@ function judge(textColor, theme) {
 
   const ratio = contrast(text, surface);
   const r = Math.round(ratio * 10) / 10;
-  if (ratio >= 7) return { ratio: r, level: 'good', message: `Tương phản ${r}:1 — rất tốt.` };
-  if (ratio >= 4.5) return { ratio: r, level: 'good', message: `Tương phản ${r}:1 — đủ đọc.` };
-  if (ratio >= 3) return { ratio: r, level: 'ok', message: `Tương phản ${r}:1 — hơi thấp, chữ nhỏ sẽ khó đọc.` };
-  return { ratio: r, level: 'poor', message: `Tương phản ${r}:1 — quá thấp, gần như không đọc được.` };
+  /*
+   * The message states the VERDICT, not the number.
+   *
+   * The chip next to it already prints "16.5:1", so a message that began
+   * "Tương phản 16.5:1 —" repeated the same figure twice in one row and read
+   * as a rendering glitch. The number belongs to the chip; the sentence says
+   * what it means and what to do about it.
+   */
+  if (ratio >= 7) return { ratio: r, level: 'good', message: 'Rất tốt — đọc thoải mái ở mọi cỡ chữ.' };
+  if (ratio >= 4.5) return { ratio: r, level: 'good', message: 'Đủ đọc — đạt chuẩn WCAG AA cho chữ thường.' };
+  if (ratio >= 3) return { ratio: r, level: 'ok', message: 'Hơi thấp — chữ nhỏ (số dư, ghi chú) sẽ khó đọc.' };
+  return { ratio: r, level: 'poor', message: 'Quá thấp — gần như không đọc được. Chọn màu khác.' };
 }
 
 /**

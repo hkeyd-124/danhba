@@ -1,0 +1,112 @@
+/**
+ * Coin sparklines — the small candle-derived line in each row.
+ *
+ * ---------------------------------------------------------------------------
+ * Where they sit
+ *
+ * Between the ticker and the price, in the empty middle of the row. The name is
+ * left-aligned and the price is right-aligned, so that gap was dead space; the
+ * shape fills it without adding a line of height.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the stroke is `non-scaling-stroke`
+ *
+ * The SVG has a fixed 100x30 viewBox and `preserveAspectRatio="none"`, so the
+ * path is stretched to whatever width the row gives it. Without this, the
+ * stretch would also scale the line thickness: a 1.5px line in a 40px strip
+ * would become a 4px slab in the 300px panel. `vector-effect` keeps the stroke
+ * at its declared width in every box.
+ * ---------------------------------------------------------------------------
+ */
+
+/* The shared <defs> holder: it paints nothing, it only carries the gradients. */
+.spark-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.spark {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.spark-line {
+  fill: none;
+  stroke: var(--up);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  transition: stroke .25s ease;
+}
+
+.spark-area {
+  stroke: none;
+  transition: fill .25s ease;
+}
+
+/* A falling window is red, a rising one green — the same language as the P&L. */
+.spark.is-down .spark-line { stroke: var(--down); }
+.spark.is-flat .spark-line { stroke: var(--muted); }
+.spark.is-flat .spark-area { fill: none; }
+
+/* ================================================================ panel rows */
+/**
+ * 60x16 in the panel, centred in the gap.
+ *
+ * The first version was `flex: 1 1 auto`, which let the SVG eat the whole gap
+ * between the name and the quantity — measured at 121px in a 300px row. It
+ * fitted, but it dominated the row: the chart became the loudest thing on a
+ * line whose subject is the coin. A fixed 60px reads as a shape beside the
+ * name, which is what the reference does.
+ *
+ * `margin: 0 auto` with `flex: 0 1 60px` centres it in whatever gap is left,
+ * instead of pinning it to the name.
+ */
+.spark-pos {
+  flex: 0 1 60px;
+  width: 60px;
+  height: 16px;
+  margin: 0 auto;
+}
+
+/* ================================================================ strip rows */
+/**
+ * 76x11 in the 13px strip row.
+ *
+ * 11px, not 13: the row is 13px and the line needs a pixel of air above and
+ * below or it touches the row above's descenders. 76px wide, centred in the
+ * gap — the same reasoning as the panel: at `flex: 1` it measured 146px and
+ * pushed the price into a corner.
+ */
+.spark-strip {
+  flex: 0 1 76px;
+  width: 76px;
+  height: 11px;
+  margin: 0 auto;
+}
+
+/* ================================================================ "Chỉ chữ" */
+/**
+ * With no surface behind it, a 1.5px line on a busy wallpaper disappears.
+ *
+ * The same treatment the panel chart gets: a halo in the text's own halo
+ * colour, painted as a drop-shadow under the stroke. `paint-order` does not
+ * apply to SVG strokes, so a shadow is the only way to outline one.
+ */
+.widget[data-theme="bare"] .spark-line {
+  stroke-width: 1.8;
+  filter: drop-shadow(0 0 1.2px var(--halo-color)) drop-shadow(0 0 1.2px var(--halo-color));
+}
+.widget[data-theme="bare"] .spark.is-down .spark-line {
+  filter: drop-shadow(0 0 1.2px var(--halo-down)) drop-shadow(0 0 1.2px var(--halo-down));
+}
+.widget[data-theme="bare"] .spark.is-up .spark-line {
+  filter: drop-shadow(0 0 1.2px var(--halo-up)) drop-shadow(0 0 1.2px var(--halo-up));
+}

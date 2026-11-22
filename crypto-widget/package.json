@@ -10,8 +10,10 @@
     "icons": "node build/make-icons.js",
     "prestart": "node build/make-icons.js",
     "start": "electron .",
-    "test": "node --test --test-timeout=15000 test/portfolio.test.js test/feed.test.js test/alerts.test.js test/store.test.js test/chart.test.js test/window-role.test.js test/dock-size.test.js test/display.test.js test/coin-icon.test.js test/text-color.test.js",
+    "test": "node --test --test-timeout=15000 test/portfolio.test.js test/feed.test.js test/alerts.test.js test/store.test.js test/chart.test.js test/window-role.test.js test/dock-size.test.js test/display.test.js test/coin-icon.test.js test/text-color.test.js test/klines.test.js test/sparkline.test.js",
     "test:e2e": "xvfb-run -a node test/e2e.js",
+    "test:spark": "xvfb-run -a node test/spark.e2e.js",
+    "test:all": "npm test && npm run test:e2e && npm run test:spark",
     "predist": "node build/make-icons.js",
     "dist": "electron-builder --win --x64",
     "dist:portable": "electron-builder --win portable --x64"

@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('cpw', {
   onState: (cb) => on('state', cb),
   onPrices: (cb) => on('prices', cb),
   onHistory: (cb) => on('history', cb),
+  onKlines: (cb) => on('klines', cb),
   onFeedStatus: (cb) => on('feed-status', cb),
   onCollapsed: (cb) => on('collapsed', cb),
   onAlertFired: (cb) => on('alert-fired', cb),

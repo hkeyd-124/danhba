@@ -25,14 +25,30 @@
   <!-- ============ collapsed summary (also the docked taskbar strip) ============ -->
   <section class="collapsed-view" id="collapsedView" hidden role="button" tabindex="0"
            title="Bấm để mở rộng">
-    <div class="cv-left" id="cvLeft">
-      <div class="cv-label">Tổng giá trị</div>
-      <div class="cv-value" id="cvValue">—</div>
+    <!--
+      The summary line. Wrapped in `.cv-sum` so that, once coin rows exist
+      below it, the strip can be a column (summary on top, rows beneath) while
+      this line stays a row of its own. Without the wrapper the two groups
+      would stack and the strip would need twice the height.
+    -->
+    <div class="cv-sum">
+      <div class="cv-left" id="cvLeft">
+        <div class="cv-label">Tổng giá trị</div>
+        <div class="cv-value" id="cvValue">—</div>
+      </div>
+      <div class="cv-right">
+        <div class="cv-pnl" id="cvPnl">—</div>
+        <div class="cv-pct" id="cvPct">—</div>
+      </div>
     </div>
-    <div class="cv-right">
-      <div class="cv-pnl" id="cvPnl">—</div>
-      <div class="cv-pct" id="cvPct">—</div>
-    </div>
+    <!--
+      Per-coin rows, filled by renderStripCoins().
+
+      Empty in the markup and built from state on every render, because the
+      list is whatever the user ticked and changes while the app runs. One row
+      is: [logo] TICKER ....... price  change
+    -->
+    <div class="cv-coins" id="cvCoins" hidden></div>
   </section>
 
   <!-- ============ expanded body ============ -->
@@ -282,6 +298,19 @@
           <label class="check"><input type="checkbox" data-display="stripPct" /><i></i><span>Phần trăm</span></label>
         </div>
         <em class="hint" id="displayStripHint">Dải hẹp có thể tự ẩn bớt số cho vừa chỗ — đó là bố cục, không phải mất tuỳ chọn.</em>
+      </div>
+
+      <!--
+        ============ which coins the strip follows ============
+        A tick per held coin. The rows are built from `state.positions` rather
+        than written here, because the coins change as trades are added — a
+        hard-coded list would be wrong the first time the user buys something
+        new, and a coin they no longer hold has no business in the strip.
+      -->
+      <div class="field">
+        <span>Theo dõi từng coin trong dải</span>
+        <div class="display-grid" id="stripCoins"></div>
+        <em class="hint" id="stripCoinsHint">Tích để thêm một dòng giá của coin đó vào dải trong taskbar.</em>
       </div>
 
       <div class="field">

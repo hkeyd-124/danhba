@@ -1,1 +1,988 @@
-__CSS__
+:root {
+  --bg: #0b0f17;
+  --bg-2: #111827;
+  --card: #151d2b;
+  --card-2: #1b2536;
+  --line: #243044;
+  --text: #e8eefc;
+  --muted: #9aabc6;
+  /* --faint is the third tier: placeholders, disabled text, the quietest
+     labels. It is set from the chosen text colour at runtime (see
+     applyLook in app.js); this value is only the pre-state fallback. */
+  --faint: #55647d;
+  --up: #16c784;
+  --down: #ea3943;
+  --accent: #4f8cff;
+  --accent-2: #7c5cff;
+  --radius: 14px;
+  --bg-alpha: 1;
+  --tb-h: 26px;
+  /* "Chỉ chữ" halo. Defaults matter: the calc() below is invalid without a
+     number here, and an invalid text-shadow silently drops the whole halo. */
+  --halo: 0.7;
+  --halo-color: rgba(0, 0, 0, .92);
+  /* Per-colour halos: a mid-tone green needs a dark outline, not the body
+     text's outline, or it washes out on a bright wallpaper. */
+  --halo-up: rgba(0, 0, 0, .92);
+  --halo-down: rgba(0, 0, 0, .92);
+  --halo-accent: rgba(0, 0, 0, .92);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+/*
+ * `[hidden]` must win over every author `display` rule.
+ *
+ * The UA stylesheet's `[hidden] { display: none }` loses to any author rule
+ * that sets `display` — and several blocks here are flex or grid containers
+ * (.hero-row, .hero-label, .alloc, .collapsed-view). Without this, setting
+ * `el.hidden = true` on one of them did nothing at all: the display switches
+ * in the settings sheet appeared to be ignored, and the allocation bar stayed
+ * on screen with the list switched off.
+ *
+ * `!important` is the point here, not a shortcut: the whole purpose is to
+ * outrank the component rules regardless of their specificity or order.
+ */
+[hidden] { display: none !important; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  /* The window itself is transparent; .widget paints every pixel. */
+  background: transparent;
+  color: var(--text);
+  font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+button, input { font-family: inherit; font-size: inherit; color: inherit; }
+input { user-select: text; cursor: text; }
+
+/* ================================================================ widget shell */
+.widget {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  color: var(--text);
+  transition: background-color .2s ease, border-color .2s ease;
+}
+
+/* ---- theme: solid (default) ---- */
+.widget[data-theme="solid"] {
+  background:
+    radial-gradient(120% 80% at 100% 0%, rgba(79,140,255,.16), transparent 60%),
+    radial-gradient(90% 70% at 0% 100%, rgba(124,92,255,.12), transparent 60%),
+    rgba(11, 15, 23, var(--bg-alpha));
+}
+
+/* ---- theme: midnight (pure black, OLED friendly) ---- */
+.widget[data-theme="midnight"] {
+  background: rgba(0, 0, 0, var(--bg-alpha));
+  border-color: #1a1a1a;
+}
+
+/* ---- theme: glass (frosted, blurs the desktop behind) ---- */
+.widget[data-theme="glass"] {
+  background: rgba(16, 22, 34, var(--bg-alpha));
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  border-color: rgba(255,255,255,.14);
+}
+
+/* ---- theme: clear (see straight through to the desktop) ---- */
+.widget[data-theme="clear"] {
+  background: rgba(10, 14, 22, var(--bg-alpha));
+  border-color: rgba(255,255,255,.16);
+}
+
+/* ---- theme: aurora ---- */
+.widget[data-theme="aurora"] {
+  background:
+    radial-gradient(90% 70% at 10% 0%, rgba(22,199,132,.30), transparent 62%),
+    radial-gradient(80% 70% at 95% 15%, rgba(79,140,255,.34), transparent 60%),
+    radial-gradient(90% 80% at 50% 110%, rgba(124,92,255,.30), transparent 62%),
+    rgba(8, 12, 20, var(--bg-alpha));
+  border-color: rgba(255,255,255,.12);
+}
+
+/* ---- theme: light ---- */
+.widget[data-theme="light"] {
+  background: rgba(244, 247, 252, var(--bg-alpha));
+  border-color: #d3dbe8;
+  --card: #ffffff;
+  --card-2: #eef2f9;
+  --line: #dde4ef;
+  --muted: #5d6b82;
+  --bg-2: #ffffff;
+
+  /*
+   * The semantic colours have to be re-declared for a light surface.
+   *
+   * #16c784 is a good green on near-black and a bad one on white: measured
+   * against #ffffff it is 2.20:1, and the P&L pill's own tinted background
+   * only brings it to 1.8:1 — the numbers were effectively invisible. The
+   * same applies to the accent blue (3.22:1 on white) and to the red.
+   *
+   * These are not "nicer" colours, they are the same hues darkened until they
+   * clear 4.5:1 on the surfaces this theme actually paints:
+   *   --up     #0a6b48  5.81:1 on the pill tint, 6.54:1 on white
+   *   --down   #b91c1c  6.47:1 on white
+   *   --accent #1d4ed8  4.93:1 on the active segment's tint, 6.70:1 on white
+   * Every other rule already reads these variables, so nothing else changes.
+   */
+  --up: #0a6b48;
+  --down: #b91c1c;
+  --accent: #1d4ed8;
+  --accent-2: #5b21b6;
+}
+.widget[data-theme="light"] .titlebar { background: rgba(255,255,255,.72); }
+.widget[data-theme="light"] .foot { background: rgba(255,255,255,.6); }
+.widget[data-theme="light"] .field input { background: #fff; }
+.widget[data-theme="light"] .seg { background: #eef2f9; }
+.widget[data-theme="light"] .alloc,
+.widget[data-theme="light"] .pos-bar { background: #e2e8f2; }
+.widget[data-theme="light"] .list::-webkit-scrollbar-thumb { background: #c3cddd; }
+.widget[data-theme="light"] .toast { background: #fff; }
+
+/* ================================================================ title bar (auto-hide) */
+/**
+ * The bar is an invisible overlay strip. It is fully transparent and takes no
+ * visual space until the pointer enters the top edge, then it fades in. It is
+ * also the window's drag handle, so dragging still works while it is hidden.
+ */
+.titlebar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: var(--tb-h);
+  z-index: 31;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 6px 0 10px;
+  background: rgba(17, 24, 39, .82);
+  border-bottom: 1px solid var(--line);
+  border-radius: 11px 11px 0 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .16s ease;
+  -webkit-app-region: drag;
+}
+.titlebar.is-shown {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/*
+ * Hover sensor.
+ *
+ * A `-webkit-app-region: drag` element swallows mouse events, so the bar itself
+ * cannot detect the pointer. This strip used to be a real element, but that
+ * made it swallow CLICKS too — in dock mode the strip is only 44px tall, so a
+ * 20px sensor covered the top half of the summary and clicking there did
+ * nothing. It is now purely decorative (pointer-events: none) and the hover is
+ * detected from a mousemove listener on the document instead.
+ */
+.tb-zone {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: var(--tb-h);
+  z-index: 30;
+  pointer-events: none;
+  -webkit-app-region: no-drag;
+}
+/*
+ * NOTE: there used to be a `.titlebar:focus-within { opacity: 1 }` rule here.
+ * It was a real bug: clicking any button left it focused, so the bar stayed
+ * visible for good and never auto-hid again. Keyboard focus is handled in
+ * app.js instead, and buttons are blurred after a click.
+ */
+
+/* the drag surface: fills the bar, sits under the buttons */
+.tb-drag {
+  position: absolute;
+  inset: 0;
+  -webkit-app-region: drag;
+}
+
+.winbtns {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+  z-index: 1;
+}
+.wbtn {
+  -webkit-app-region: no-drag;
+  width: 24px; height: 20px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--muted);
+  cursor: pointer; display: grid; place-items: center;
+  font-size: 11px; line-height: 1; transition: background .15s, color .15s;
+}
+.wbtn:hover { background: rgba(255,255,255,.1); color: var(--text); }
+.wbtn-close:hover { background: var(--down); color: #fff; }
+.wbtn.is-on { color: var(--accent); background: rgba(79,140,255,.16); }
+
+/* ================================================================ collapsed */
+.collapsed-view {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 10px 16px 14px; flex: 1 1 auto;
+  cursor: pointer;
+}
+/*
+ * `display: flex` above would otherwise beat the `hidden` attribute, which is
+ * how the collapsed summary used to leak into the expanded view and print the
+ * total value twice. This rule must stay after the one above.
+ */
+.collapsed-view[hidden] { display: none; }
+.collapsed-view:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.cv-label { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px; }
+.cv-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.cv-right { text-align: right; }
+.cv-pnl { font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.cv-pct { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ================================================================ body */
+.body { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+
+.hero { padding: 14px 14px 10px; flex: 0 0 auto; }
+.hero-label {
+  display: flex; align-items: center; gap: 6px;
+  color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .7px;
+}
+.hero-status {
+  margin-left: auto; text-transform: none; letter-spacing: 0;
+  font-size: 10px; color: var(--muted); opacity: 1; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 45%;
+}
+.hero-value {
+  font-size: 27px; font-weight: 700; letter-spacing: -.5px;
+  font-variant-numeric: tabular-nums; margin: 3px 0 7px;
+}
+.hero-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pill {
+  padding: 3px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 650;
+  font-variant-numeric: tabular-nums; background: rgba(22,199,132,.14); color: var(--up);
+}
+.pill.is-down { background: rgba(234,57,67,.14); color: var(--down); }
+.pill-ghost { background: rgba(255,255,255,.06); color: var(--muted); }
+.hero-meta { color: var(--muted); font-size: 11px; margin-left: auto; }
+
+.dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #64748b; flex: 0 0 auto;
+  box-shadow: 0 0 0 3px rgba(100,116,139,.15);
+  transition: background .25s, box-shadow .25s;
+}
+.dot[data-status="live"] { background: var(--up); box-shadow: 0 0 0 3px rgba(22,199,132,.18); animation: pulse 2.4s infinite; }
+.dot[data-status="connecting"], .dot[data-status="reconnecting"] { background: #f0b429; box-shadow: 0 0 0 3px rgba(240,180,41,.18); }
+.dot[data-status="offline"] { background: var(--down); box-shadow: 0 0 0 3px rgba(234,57,67,.18); }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+
+/* ================================================================ tabs */
+.tabs {
+  display: flex; gap: 4px; padding: 0 10px 8px; flex: 0 0 auto;
+  border-bottom: 1px solid var(--line);
+}
+.tab {
+  flex: 1 1 0; min-width: 0; padding: 7px 4px; border: 0; border-radius: 9px;
+  background: transparent; color: var(--muted); cursor: pointer;
+  font-size: 12px; font-weight: 600; transition: background .15s, color .15s;
+  white-space: nowrap;
+}
+.tab:hover { background: rgba(255,255,255,.05); color: var(--text); }
+.tab.is-active { background: rgba(79,140,255,.16); color: var(--accent); }
+.widget[data-theme="light"] .tab.is-active { color: var(--accent); }
+
+/* ================================================================ panels */
+.panel { display: none; flex: 1 1 auto; min-height: 0; flex-direction: column; padding: 10px 10px 0; }
+.panel.is-active { display: flex; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; padding: 0 2px 8px; flex: 0 0 auto; gap: 8px; }
+.panel-title { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; font-weight: 650; }
+
+.list { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding-bottom: 8px; }
+.list::-webkit-scrollbar { width: 7px; }
+.list::-webkit-scrollbar-thumb { background: #2b3a52; border-radius: 4px; }
+.list::-webkit-scrollbar-thumb:hover { background: #3a4d6b; }
+
+.alloc { display: flex; height: 5px; border-radius: 3px; overflow: hidden; margin: 0 2px 9px; background: #1a2333; flex: 0 0 auto; }
+.alloc span { height: 100%; transition: width .35s ease; }
+
+.pos {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 8px;
+  padding: 9px 10px; border-radius: 11px; background: var(--card);
+  border: 1px solid transparent; margin-bottom: 6px; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.pos:hover { background: var(--card-2); border-color: var(--line); }
+.pos-top { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.pos-sym { font-weight: 700; letter-spacing: .2px; }
+.pos-qty { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.pos-val { text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; }
+.pos-sub { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pos-pnl { text-align: right; font-size: 11.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.up { color: var(--up); }
+.down { color: var(--down); }
+.flat { color: var(--muted); }
+.pos-bar { grid-column: 1 / -1; height: 3px; border-radius: 2px; background: #1a2333; overflow: hidden; margin-top: 5px; }
+.pos-bar i { display: block; height: 100%; border-radius: 2px; }
+
+.trade {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center;
+  padding: 8px 8px 8px 10px; border-radius: 10px; background: var(--card); margin-bottom: 5px;
+}
+.trade:hover { background: var(--card-2); }
+.side {
+  font-size: 10px; font-weight: 800; letter-spacing: .5px;
+  padding: 3px 6px; border-radius: 6px; text-transform: uppercase;
+}
+.side.buy { background: rgba(22,199,132,.16); color: var(--up); }
+.side.sell { background: rgba(234,57,67,.16); color: var(--down); }
+.trade-main { min-width: 0; }
+.trade-sym { font-weight: 650; }
+.trade-meta { color: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trade-actions { display: flex; gap: 2px; }
+.iconbtn {
+  width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent;
+  color: var(--muted); cursor: pointer; display: grid; place-items: center; font-size: 12px;
+}
+.iconbtn:hover { background: rgba(255,255,255,.09); color: var(--text); }
+.iconbtn.danger:hover { background: rgba(234,57,67,.18); color: var(--down); }
+
+.alert {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 9px; align-items: center;
+  padding: 9px 8px 9px 10px; border-radius: 10px; background: var(--card); margin-bottom: 5px;
+}
+.alert.is-off { opacity: .5; }
+.alert-ico { font-size: 15px; }
+.alert-main { min-width: 0; }
+.alert-title { font-weight: 650; font-variant-numeric: tabular-nums; }
+.alert-meta { color: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.alert-actions { display: flex; align-items: center; gap: 4px; }
+
+.switch { position: relative; width: 32px; height: 18px; flex: 0 0 auto; }
+.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.switch i {
+  position: absolute; inset: 0; border-radius: 999px; background: #2b3a52;
+  transition: background .18s; pointer-events: none;
+}
+.switch i::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+  border-radius: 50%; background: #93a4c0; transition: transform .18s, background .18s;
+}
+.switch input:checked + i { background: rgba(79,140,255,.5); }
+.switch input:checked + i::after { transform: translateX(14px); background: #fff; }
+
+.empty { text-align: center; padding: 26px 12px; color: var(--muted); }
+.empty-ico { font-size: 26px; margin-bottom: 8px; opacity: .8; }
+.empty p { font-size: 12px; }
+.muted { color: var(--muted); font-size: 11px; margin-top: 3px; }
+
+.foot {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px 10px; border-top: 1px solid var(--line); background: rgba(17,24,39,.5);
+}
+.warn { color: #f0b429; font-size: 10.5px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.linkbtn {
+  margin-left: auto; border: 0; background: transparent; color: var(--muted);
+  font-size: 10.5px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+  padding: 2px 0;
+}
+.linkbtn:hover { color: var(--text); }
+.linkbtn-ico {
+  margin-left: 0; text-decoration: none; font-size: 13px;
+  width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center;
+}
+.linkbtn-ico:hover { background: rgba(255,255,255,.08); }
+.alert-foot { display: flex; gap: 6px; padding: 4px 2px 10px; flex: 0 0 auto; }
+.alert-foot .btn { display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
+
+.btn {
+  border: 1px solid var(--line); background: var(--card-2); color: var(--text);
+  padding: 8px 14px; border-radius: 9px; cursor: pointer; font-weight: 600;
+  transition: background .15s, border-color .15s, transform .06s;
+}
+.btn:hover { background: #22304a; }
+.btn:active { transform: scale(.98); }
+.btn-sm { padding: 5px 10px; font-size: 11.5px; border-radius: 8px; }
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color: transparent; color: #fff;
+}
+.btn-primary:hover { filter: brightness(1.1); background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+.btn-ghost { background: transparent; }
+.btn-ghost:hover { background: rgba(255,255,255,.06); }
+
+/* ================================================================ modal */
+.modal {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(4, 7, 12, .66);
+  backdrop-filter: blur(3px);
+  display: flex; align-items: flex-end; justify-content: center;
+  animation: fade .16s ease;
+}
+.modal[hidden] { display: none; }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+.sheet {
+  width: 100%; max-height: 100%; overflow-y: auto;
+  background: var(--bg-2); border-top: 1px solid var(--line);
+  border-radius: 16px 16px 0 0; padding: 14px 14px 16px;
+  animation: slideUp .2s cubic-bezier(.2,.8,.3,1);
+}
+@keyframes slideUp { from { transform: translateY(18px); opacity: .6; } to { transform: none; opacity: 1; } }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.sheet-head h2 { font-size: 15px; font-weight: 700; }
+
+.field { display: block; margin-bottom: 12px; }
+/*
+ * `display: block` above beats the `hidden` attribute, which is how a hidden
+ * field would still show. This rule must stay after the one above.
+ */
+.field[hidden] { display: none; }
+.field > span { display: block; color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; }
+.field > span b { color: var(--text); font-weight: 650; text-transform: none; letter-spacing: 0; }
+.field input {
+  width: 100%; padding: 9px 11px; border-radius: 9px;
+  border: 1px solid var(--line); background: #0e1522; color: var(--text);
+  outline: none; transition: border-color .15s, box-shadow .15s;
+}
+.field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,140,255,.16); }
+.field input::placeholder { color: var(--faint); }
+.hint { display: block; color: var(--muted); font-size: 10.5px; font-style: normal; margin-top: 5px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+.seg { display: flex; gap: 4px; background: #0e1522; border: 1px solid var(--line); border-radius: 9px; padding: 3px; }
+.seg-btn {
+  flex: 1; padding: 7px 6px; border: 0; border-radius: 7px; background: transparent;
+  color: var(--muted); cursor: pointer; font-weight: 600; font-size: 12px; transition: background .15s, color .15s;
+}
+.seg-btn.is-active { background: rgba(79,140,255,.2); color: var(--text); }
+/*
+ * On the light theme the active segment's text was #d5e4ff on a #cedefa track
+ * — 1.06:1, i.e. invisible. The tint stays (it is what marks the selection),
+ * the text becomes the theme's own accent, which measures 4.93:1 on it.
+ */
+.widget[data-theme="light"] .seg-btn.is-active { color: var(--accent); }
+.widget[data-theme="light"] .seg-btn[data-side="BUY"].is-active { color: var(--up); }
+.widget[data-theme="light"] .seg-btn[data-side="SELL"].is-active { color: var(--down); }
+.seg-btn[data-side="BUY"].is-active { background: rgba(22,199,132,.2); color: var(--up); }
+.seg-btn[data-side="SELL"].is-active { background: rgba(234,57,67,.2); color: var(--down); }
+
+.calc {
+  padding: 8px 10px; border-radius: 9px; background: rgba(79,140,255,.08);
+  border: 1px solid rgba(79,140,255,.18); color: var(--muted); font-size: 11.5px;
+  font-variant-numeric: tabular-nums; margin-bottom: 10px;
+}
+.form-error { color: var(--down); font-size: 11.5px; margin-bottom: 8px; }
+.sheet-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* ================================================================ appearance controls */
+.themes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.theme {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 8px 4px 7px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: var(--muted);
+  font-size: 10.5px; font-weight: 600; transition: border-color .15s, color .15s, background .15s;
+}
+.theme:hover { background: rgba(255,255,255,.05); color: var(--text); }
+.theme.is-active { border-color: var(--accent); color: var(--text); background: rgba(79,140,255,.12); }
+.theme b { font-weight: 600; }
+.sw { width: 100%; height: 26px; border-radius: 7px; border: 1px solid rgba(255,255,255,.12); }
+.sw-solid { background: linear-gradient(135deg, #16233a, #0b0f17); }
+.sw-midnight { background: #000; }
+.sw-glass { background: linear-gradient(135deg, rgba(120,160,255,.5), rgba(30,40,60,.6)); backdrop-filter: blur(4px); }
+.sw-clear { background: repeating-conic-gradient(#2a3446 0% 25%, #1a2230 0% 50%) 50% / 10px 10px; }
+.sw-aurora { background: linear-gradient(135deg, #16c784, #4f8cff 50%, #7c5cff); }
+.sw-light { background: linear-gradient(135deg, #ffffff, #dfe7f4); }
+
+input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 4px; border-radius: 2px; background: #2b3a52; outline: none;
+  padding: 0; border: 0;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 15px; height: 15px; border-radius: 50%;
+  background: var(--accent); border: 2px solid #0e1522; cursor: pointer;
+}
+
+.swatches { display: flex; flex-wrap: wrap; gap: 7px; }
+.swatch {
+  width: 28px; height: 28px; border-radius: 8px; cursor: pointer;
+  background: var(--c); border: 2px solid transparent;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
+  transition: transform .12s, border-color .12s;
+}
+.swatch:hover { transform: scale(1.08); }
+.swatch.is-active { border-color: var(--accent); }
+.swatch-custom {
+  position: relative; overflow: hidden; display: grid; place-items: center;
+  background: conic-gradient(#ea3943, #f0b429, #16c784, #4f8cff, #7c5cff, #ea3943);
+}
+.swatch-custom input {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; cursor: pointer; border: 0; padding: 0;
+}
+.size-row { display: flex; align-items: center; gap: 10px; }
+.size-row .hint { margin: 0; flex: 1; }
+
+/* the appearance sheet is a settings panel, not a form — give it room */
+#lookModal .sheet { padding: 16px 16px 18px; }
+#lookModal .sheet-head { margin-bottom: 14px; }
+#lookModal .field { margin-bottom: 14px; }
+#lookModal .sheet-head .wbtn { width: 26px; height: 24px; }
+
+/* ================================================================ toast */
+.toast {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+  background: #1e2a3d; border: 1px solid var(--line); color: var(--text);
+  padding: 8px 14px; border-radius: 999px; font-size: 11.5px; z-index: 80;
+  box-shadow: 0 8px 24px rgba(0,0,0,.45); animation: fade .15s ease;
+  max-width: 90%; text-align: center;
+}
+.toast[hidden] { display: none; }
+
+/* ================================================================ resize grips */
+/**
+ * A transparent frameless window has no native resize border on Windows, so
+ * these invisible strips stand in for it. They are 6px wide, sit above the
+ * content, and only change the cursor — nothing is drawn.
+ */
+.grip { position: absolute; z-index: 40; -webkit-app-region: no-drag; }
+.grip-n  { top: 0; left: 8px; right: 8px; height: 5px; cursor: ns-resize; }
+.grip-s  { bottom: 0; left: 8px; right: 8px; height: 5px; cursor: ns-resize; }
+.grip-e  { top: 8px; bottom: 8px; right: 0; width: 5px; cursor: ew-resize; }
+.grip-w  { top: 8px; bottom: 8px; left: 0; width: 5px; cursor: ew-resize; }
+.grip-ne { top: 0; right: 0; width: 10px; height: 10px; cursor: nesw-resize; }
+.grip-nw { top: 0; left: 0; width: 10px; height: 10px; cursor: nwse-resize; }
+.grip-se { bottom: 0; right: 0; width: 12px; height: 12px; cursor: nwse-resize; }
+.grip-sw { bottom: 0; left: 0; width: 10px; height: 10px; cursor: nesw-resize; }
+
+/* ================================================================ collapsed mode */
+.widget.is-collapsed .body { display: none; }
+.widget.is-collapsed .collapsed-view { display: flex; }
+.widget.is-collapsed .titlebar { border-bottom: 0; }
+
+/* ================================================================ theme: bare (text only) */
+/**
+ * "Chỉ chữ" — the widget paints NO surface at all: no background, no border,
+ * no radius, no shadow. Every pixel that is not text is fully transparent, so
+ * the desktop shows straight through.
+ *
+ * Legibility is handled by a text halo (text-shadow, which inherits, so one
+ * declaration covers every label) whose colour is chosen in app.js from the
+ * luminance of the chosen text colour: light text gets a dark halo, dark text
+ * gets a light one. That is what keeps the numbers readable on a white
+ * wallpaper and on a black one with the same setting.
+ */
+.widget[data-theme="bare"] {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  /*
+   * Legibility on an arbitrary wallpaper.
+   *
+   * The first attempt was a stack of text-shadows. It failed for a measurable
+   * reason: a shadow is drawn OUTSIDE the glyph, so on a busy background the
+   * gaps between letters still show the wallpaper, and stacking eight of them
+   * to close those gaps blurs the letterform into a blob at 10-12px.
+   *
+   * `-webkit-text-stroke` with `paint-order: stroke fill` is the right tool:
+   * the stroke is painted BEHIND the fill, so the glyph keeps its exact shape
+   * and gains a solid outline of any width. Verified supported in this
+   * Electron build (CSS.supports + computed style) before relying on it.
+   *
+   * The blur shadow stays, but only as a soft glow around the outline — it is
+   * no longer what makes the text readable.
+   */
+  -webkit-text-stroke-width: calc(0.6px + 2.2px * var(--halo));
+  -webkit-text-stroke-color: var(--halo-color);
+  paint-order: stroke fill;
+  text-shadow: 0 0 calc(3px + 7px * var(--halo)) var(--halo-color);
+}
+
+/* every inner surface loses its fill so only glyphs remain */
+.widget[data-theme="bare"] .hero,
+.widget[data-theme="bare"] .tabs,
+.widget[data-theme="bare"] .foot,
+.widget[data-theme="bare"] .panel,
+.widget[data-theme="bare"] .collapsed-view,
+.widget[data-theme="bare"] .panel-head { background: none; border-color: transparent; }
+
+.widget[data-theme="bare"] .pos,
+.widget[data-theme="bare"] .trade,
+.widget[data-theme="bare"] .alert {
+  background: none;
+  border-color: transparent;
+}
+/* hover still needs a hint, but only while the pointer is on the row */
+.widget[data-theme="bare"] .pos:hover,
+.widget[data-theme="bare"] .trade:hover,
+.widget[data-theme="bare"] .alert:hover { background: rgba(127, 140, 165, .16); }
+
+/* thin rules and bars stay, at low contrast, so structure is still readable */
+.widget[data-theme="bare"] .alloc,
+.widget[data-theme="bare"] .pos-bar { background: rgba(127, 140, 165, .28); }
+.widget[data-theme="bare"] .tabs { border-bottom-color: rgba(127, 140, 165, .22); }
+.widget[data-theme="bare"] .foot { border-top-color: rgba(127, 140, 165, .22); }
+
+/* the active tab is marked with an underline instead of a filled pill */
+.widget[data-theme="bare"] .tab.is-active {
+  background: none;
+  color: var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.widget[data-theme="bare"] .tab:hover { background: rgba(127, 140, 165, .16); }
+
+/* pills keep a faint tint so P&L still reads as up/down at a glance */
+.widget[data-theme="bare"] .pill {
+  background: none;
+  padding: 0;
+  color: var(--up);
+  font-weight: 700;
+}
+.widget[data-theme="bare"] .pill.is-down { background: none; color: var(--down); }
+.widget[data-theme="bare"] .pill-ghost { background: none; color: var(--muted); }
+
+/*
+ * Rows are separated by whitespace, not by rules: a divider line would be a
+ * border, and this style promises none. Extra gap does the same job.
+ */
+.widget[data-theme="bare"] .pos { margin-bottom: 12px; padding: 4px 2px; }
+.widget[data-theme="bare"] .trade { margin-bottom: 10px; padding: 4px 2px; }
+.widget[data-theme="bare"] .alert { margin-bottom: 10px; padding: 4px 2px; }
+
+/* small text needs a touch more weight once it has no surface behind it */
+.widget[data-theme="bare"] .pos-qty,
+.widget[data-theme="bare"] .pos-sub,
+.widget[data-theme="bare"] .trade-meta,
+.widget[data-theme="bare"] .alert-meta,
+.widget[data-theme="bare"] .hero-label,
+.widget[data-theme="bare"] .hero-status,
+.widget[data-theme="bare"] .cv-label,
+.widget[data-theme="bare"] .cv-pct,
+.widget[data-theme="bare"] .muted,
+.widget[data-theme="bare"] .hint { font-weight: 500; }
+
+/**
+ * Small text is the hard case: at 10.5px a 1.5px outline eats most of the
+ * glyph, so the letters turn into blobs. The fix is to give the small text
+ * more size and weight (so there is more glyph to protect) and a slightly
+ * tighter outline, rather than a fatter one.
+ */
+.widget[data-theme="bare"] .pos-qty,
+.widget[data-theme="bare"] .pos-sub,
+.widget[data-theme="bare"] .trade-meta,
+.widget[data-theme="bare"] .alert-meta,
+.widget[data-theme="bare"] .hero-label,
+.widget[data-theme="bare"] .hero-status,
+.widget[data-theme="bare"] .cv-label,
+.widget[data-theme="bare"] .cv-pct,
+.widget[data-theme="bare"] .muted,
+.widget[data-theme="bare"] .hint,
+.widget[data-theme="bare"] .linkbtn,
+.widget[data-theme="bare"] .tab,
+.widget[data-theme="bare"] .panel-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .1px;
+}
+.widget[data-theme="bare"] .tab { font-size: 12.5px; }
+.widget[data-theme="bare"] .panel-title { font-size: 11.5px; }
+
+/*
+ * The muted tone is derived for a dark card. With no card behind it, it is too
+ * dim to survive a bright wallpaper, so it is lifted toward the text colour.
+ * Mixed with the halo colour (not with `transparent`) so the result stays
+ * fully opaque — a translucent label would let the wallpaper through it.
+ */
+.widget[data-theme="bare"] { --muted: color-mix(in srgb, var(--text) 80%, var(--halo-color)); }
+
+/*
+ * Semantic colours get their OWN halo. A single global halo is wrong for them:
+ * with dark body text the halo is white, and white behind mid-tone green is
+ * only ~2.2:1 — the P&L numbers wash out on a bright wallpaper. Measured, not
+ * guessed: green #16c784 is 2.2:1 on white and 7.9:1 on black.
+ */
+.widget[data-theme="bare"] .up,
+.widget[data-theme="bare"] .pill,
+.widget[data-theme="bare"] .cv-pnl.up {
+  -webkit-text-stroke-color: var(--halo-up);
+  text-shadow: 0 0 calc(3px + 7px * var(--halo)) var(--halo-up);
+}
+.widget[data-theme="bare"] .down,
+.widget[data-theme="bare"] .pill.is-down,
+.widget[data-theme="bare"] .cv-pnl.down {
+  -webkit-text-stroke-color: var(--halo-down);
+  text-shadow: 0 0 calc(3px + 7px * var(--halo)) var(--halo-down);
+}
+.widget[data-theme="bare"] .tab.is-active {
+  -webkit-text-stroke-color: var(--halo-accent);
+  text-shadow: 0 0 calc(3px + 7px * var(--halo)) var(--halo-accent);
+}
+/*
+ * `.pill-ghost` is the neutral percentage chip. It inherits `.pill`'s green
+ * halo, but its own text is the muted grey — and a dark halo behind dark grey
+ * is only 2.6:1. It must use the body-text halo, which is always the opposite
+ * tone. This rule has to come AFTER the `.pill` rule above to win.
+ */
+.widget[data-theme="bare"] .pill-ghost {
+  -webkit-text-stroke-color: var(--halo-color);
+  text-shadow: 0 0 calc(3px + 7px * var(--halo)) var(--halo-color);
+}
+/*
+ * NOTE: `.pos-sym` must NOT be in the rule above. The coin symbol is drawn in
+ * a per-coin accent colour, and the accent halo is chosen for #4f8cff — but a
+ * light accent (e.g. the yellow used for some coins) then gets a light halo
+ * and disappears. It keeps the body-text halo, which is chosen from the body
+ * text colour and is therefore always the opposite tone.
+ */
+
+/*
+ * The auto-hiding bar in "Chỉ chữ" mode.
+ *
+ * It must NOT be a full-width pill: the hero label ("TỔNG GIÁ TRỊ DANH MỤC")
+ * sits at the top-left, and a full-width bar covered it — caught in a visual
+ * check. So the bar itself stays transparent (it is still the drag handle and
+ * still spans the width), and only the three buttons get their own small dark
+ * discs. Nothing is drawn where there is no button.
+ */
+.widget[data-theme="bare"] .titlebar {
+  background: none;
+  border-bottom: 0;
+  border-radius: 0;
+  padding: 0 6px;
+}
+.widget[data-theme="bare"] .wbtn {
+  background: rgba(12, 16, 24, .78);
+  border-radius: 50%;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* dialogs are transient and must stay usable, so they keep a real surface */
+/*
+ * The scrim is NOT optional in this style. With a fully transparent overlay the
+ * widget's own text showed through the sheet and collided with the form's
+ * labels — a visual check caught it. "Chỉ chữ" is about the widget having no
+ * surface, not about a dialog being unreadable, so the scrim stays.
+ */
+.widget[data-theme="bare"] .modal {
+  background: rgba(4, 7, 12, .62);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+.widget[data-theme="bare"] .sheet {
+  background: rgba(14, 20, 31, .97);
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 16px;
+  margin: 8px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .55);
+}
+/* the halo belongs to the desktop-facing text, not to text on a real surface */
+.widget[data-theme="bare"] .sheet,
+.widget[data-theme="bare"] .sheet * { text-shadow: none; }
+
+/* the swatch for this style: a checkerboard with a lone "Aa" */
+.sw-bare {
+  background:
+    repeating-conic-gradient(#2a3446 0% 25%, #1a2230 0% 50%) 50% / 10px 10px;
+  display: grid; place-items: center;
+  color: #fff; font-size: 12px; font-weight: 700;
+  text-shadow: 0 0 2px #000, 0 0 4px #000;
+}
+
+/*
+ * With no border there is nothing to show where the window ends, so the resize
+ * strips reveal themselves only while the pointer is on them. Nothing is drawn
+ * at rest, which keeps the "no frame" promise.
+ */
+.widget[data-theme="bare"] .grip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity .15s ease;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.widget[data-theme="bare"] .grip:hover::after { opacity: .55; }
+/* the corner grips are square, so their indicator is a small dot, not a bar */
+.widget[data-theme="bare"] .grip-ne::after,
+.widget[data-theme="bare"] .grip-nw::after,
+.widget[data-theme="bare"] .grip-se::after,
+.widget[data-theme="bare"] .grip-sw::after { inset: 3px; border-radius: 50%; }
+
+/* ================================================================ coin badge */
+/*
+ * The badge is a rounded square in the coin's brand colour with its ticker
+ * inside. `--coin` and `--coin-ink` are set through CSSOM by paintStyles(),
+ * because the page's CSP (`style-src 'self'`) drops inline style attributes.
+ *
+ * The ink colour is not always white: BNB's yellow and DOGE's gold need dark
+ * text, and the main process decides that per coin (src/coin-icon.js) rather
+ * than this stylesheet guessing from the hex.
+ */
+.coin {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--coin, #4f8cff);
+  color: var(--coin-ink, #fff);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: -.2px;
+  line-height: 1;
+  text-transform: uppercase;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16);
+}
+.coin-sm { width: 18px; height: 18px; border-radius: 6px; font-size: 7.5px; }
+
+/*
+ * The size used in the settings sheet's per-coin tick list.
+ *
+ * 15px, matching the tick box beside it, so the two read as one control rather
+ * than a logo with a checkbox bolted on. The drawn fallback's glyph drops to
+ * 6px, which is the smallest that still resolves a 3-letter ticker.
+ */
+.coin-xs { width: 15px; height: 15px; border-radius: 5px; font-size: 6px; }
+
+/*
+ * A real coin logo, vendored in src/coin-data.js and sent as a data URI.
+ *
+ * `object-fit: contain` because the two sources disagree about their canvas:
+ * the spothq icons fill the box, while the CoinCap PNGs are square with a
+ * little transparent margin. Without `contain` the PNGs would render slightly
+ * smaller than the others and the list would look ragged.
+ *
+ * No background and no inset ring: the drawn badge needs both to read as a
+ * disc, but a real logo already has its own shape and colour, and a ring
+ * around it would look like a second border.
+ */
+.coin-img {
+  background: none;
+  box-shadow: none;
+  object-fit: contain;
+  display: block;
+}
+
+/*
+ * The summary line of the collapsed strip.
+ *
+ * A row of its own, so that when coin rows are added beneath it the strip can
+ * become a column without the total and the P&L stacking on separate lines.
+ * In the expanded panel this wrapper is inert — the panel never shows the
+ * collapsed view at all.
+ */
+.cv-sum {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* ================================================================ display switches */
+/*
+ * A two-column grid of checkbox rows. The native box is hidden and the visible
+ * square is the <i>, so the tick can be drawn in the theme's own colours —
+ * a native checkbox stays white-on-white on the light theme.
+ */
+.display-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+  margin-top: 2px;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--text);
+  transition: background .12s;
+}
+.check:hover { background: rgba(255, 255, 255, .05); }
+.check input { position: absolute; opacity: 0; width: 0; height: 0; }
+.check i {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  border: 1.5px solid var(--line);
+  background: #0e1522;
+  position: relative;
+  transition: background .12s, border-color .12s;
+}
+.check i::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(.4);
+  opacity: 0;
+  transition: opacity .12s, transform .12s;
+}
+.check input:checked + i { background: var(--accent); border-color: var(--accent); }
+.check input:checked + i::after { opacity: 1; transform: rotate(45deg) scale(1); }
+.check input:focus-visible + i { box-shadow: 0 0 0 3px rgba(79, 140, 255, .28); }
+.check span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.widget[data-theme="light"] .check i { background: #fff; border-color: #cbd5e1; }
+
+/* ================================================================ contrast readout */
+.contrast-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.contrast-row .hint { margin: 0; flex: 1; }
+.contrast-chip {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, .07);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.contrast-chip[data-level="good"] { background: rgba(22, 199, 132, .16); color: var(--up); }
+.contrast-chip[data-level="ok"] { background: rgba(240, 180, 41, .16); color: #f0b429; }
+.contrast-chip[data-level="poor"] { background: rgba(234, 57, 67, .16); color: var(--down); }
+
+/* ================================================================ small additions */
+/* The "everything is hidden" notice sits where the list would be. */
+.empty-notice { padding: 20px 12px; }
+.empty-notice .empty-ico { font-size: 22px; }
+
+/* With the list switched off the panel is just the allocation bar, so the
+   bar's own bottom margin would leave a stray gap. */
+#panel-positions.no-list .alloc { margin-bottom: 2px; }
+
+/* Inline variants: a warning or a muted note inside a line of text, not a
+   block of its own. */
+.warn-inline { color: #f0b429; font-size: 10px; }
+.muted-inline { color: var(--muted); font-weight: 500; }
+
+/* A second segmented row under the first needs its own gap; the inline
+   `style="margin-top:6px"` this replaces was blocked by the CSP. */
+.seg-gap { margin-top: 6px; }
+
+/* A hint that sits inside a flex row already has its spacing from the row. */
+.hint-flat { margin: 0; flex: 1; }

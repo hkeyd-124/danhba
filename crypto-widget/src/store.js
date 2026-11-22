@@ -186,7 +186,11 @@ class Store {
 
     const history = Array.isArray(parsed.history)
       ? parsed.history
-        .filter((p) => p && Number.isFinite(Number(p.t)) && Number.isFinite(Number(p.v)))
+        // `v > 0` as well as finite: `pushHistory` refuses a non-positive
+        // value, so a 0 that got into the file some other way (a hand edit, a
+        // future build) must not be loaded either — one 0 sample drags the
+        // whole chart to the floor.
+        .filter((p) => p && Number.isFinite(Number(p.t)) && Number(p.v) > 0)
         .map((p) => ({ t: Number(p.t), v: Number(p.v) }))
         .slice(-HISTORY_MAX)
       : [];
@@ -319,6 +323,13 @@ class Store {
     // through the normaliser, so the renderer cannot store junk.
     if (p.stripCoins !== undefined) {
       p.stripCoins = normalizeStripCoins(p.stripCoins);
+    }
+    // `candleInterval` is a token that goes straight into an exchange URL, so a
+    // patch has to be normalised exactly like the loader does. Without this a
+    // bad value from the renderer was stored verbatim and every candle request
+    // came back 400 — the chart stayed blank with no error anywhere.
+    if (p.candleInterval !== undefined) {
+      p.candleInterval = normalizeInterval(p.candleInterval);
     }
     this.state.settings = { ...this.state.settings, ...p };
     this.saveDebounced();

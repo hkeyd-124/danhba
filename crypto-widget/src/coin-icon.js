@@ -26,6 +26,8 @@
  * coin's brand colour with its ticker inside. That is a deliberate fallback,
  * not a placeholder to be embarrassed about — it identifies the coin at a
  * glance and is what every version before this one drew.
+ *
+ * `renderer/assets/coins/CREDITS.md` records the provenance and licence.
  * ---------------------------------------------------------------------------
  */
 
@@ -127,7 +129,8 @@ const BRAND = Object.freeze({
 /**
  * The vendored logos, as data URIs.
  *
- * `src/coin-data.js` is generated from the two upstream sets and holds one
+ * `src/coin-data.js` is generated from the two upstream sets (see
+ * `renderer/assets/coins/CREDITS.md` for provenance and licence) and holds one
  * entry per coin we have a real logo for. It is a plain object of
  * `TICKER -> data:image/...;base64,...`.
  *

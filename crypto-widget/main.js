@@ -45,6 +45,7 @@ const dockSize = require('./src/dock-size');
 const display = require('./src/display');
 const { badgeFor, glyphColor } = require('./src/coin-icon');
 const textColor = require('./src/text-color');
+const { KlineCache } = require('./src/klines');
 
 const IS_TEST = process.env.CPW_TEST === '1';
 const EXPANDED = { width: 420, height: 660 };
@@ -95,6 +96,8 @@ let prices = {};
 let collapsed = false;
 let quitting = false;
 let historyTimer = null;
+let klines = null;
+let klineTimer = null;
 
 /**
  * Blur guard. Collapsing on blur is what makes the widget behave like a
@@ -466,6 +469,7 @@ function pushState() {
     badges,
     tones,
     history: store.history,
+    klines: klines ? klines.snapshot() : {},
     feedStatus: feed ? feed.status : 'idle',
     collapsed,
     docked: isDocked(),
@@ -477,6 +481,46 @@ function refreshSymbols() {
   const syms = symbolsInUse(store.trades);
   if (feed) feed.setSymbols(syms);
   engine.setAlerts(store.alerts);
+  // Candles follow the same symbol list as the price feed: one definition of
+  // "the coins this portfolio cares about", so the two can never disagree.
+  if (klines) {
+    klines.prune(syms);
+    loadKlines(syms);
+  }
+}
+
+/**
+ * Fetch candle history for the given symbols and push it to the renderer.
+ *
+ * Called on start, whenever the symbol list changes, and on a slow timer. The
+ * cache decides what is actually stale, so calling this often is cheap: a
+ * fresh series is not refetched.
+ *
+ * Failures are swallowed on purpose. A missing sparkline is a cosmetic gap;
+ * an unhandled rejection here would take down the whole widget.
+ */
+async function loadKlines(symbols) {
+  if (!klines) return;
+  try {
+    const changed = await klines.load(symbols);
+    if (changed.length) send('klines', klines.snapshot());
+  } catch (err) {
+    if (process.env.CPW_DEBUG) console.error('[klines]', err.message);
+  }
+}
+
+/**
+ * Refresh candles on a slow timer.
+ *
+ * 60s, matching the cache TTL: the newest candle is still forming, so anything
+ * faster would re-request the same data. This is the only periodic outbound
+ * request besides the price feed, and it goes to the same host.
+ */
+function startKlineRefresher() {
+  clearInterval(klineTimer);
+  klineTimer = setInterval(() => {
+    if (store) loadKlines(symbolsInUse(store.trades));
+  }, 60 * 1000);
 }
 
 /**
@@ -1317,6 +1361,9 @@ app.whenReady().then(() => {
     restBase: process.env.CPW_REST_BASE || undefined,
   });
   engine = new AlertEngine();
+  klines = new KlineCache({
+    base: process.env.CPW_KLINES_BASE || undefined,
+  });
 
   feed.on('price', ({ symbol, price }) => {
     prices[symbol] = price;
@@ -1336,6 +1383,7 @@ app.whenReady().then(() => {
   refreshSymbols();
   feed.start();
   startHistorySampler();
+  startKlineRefresher();
 
   app.on('activate', () => { if (!win) createWindow(); });
 });
@@ -1345,6 +1393,8 @@ app.on('before-quit', () => {
   stopResize(false);
   clearInterval(historyTimer);
   clearInterval(envTimer);
+  clearInterval(klineTimer);
+  if (klines) klines.stop();
   if (store) store.flush();
   if (feed) feed.stop();
 });

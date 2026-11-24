@@ -89,10 +89,10 @@ function colorFor(sym) {
  * `img-src 'self' data:` and nothing else, so this is the only kind of image
  * the widget can paint — and it can never point off the machine.
  *
- * ---------------------------------------------------------------------------
+ * -------------------------------------------------------------------------
  * Why the colours are NOT written as a `style="..."` attribute
  *
- * The page's CSP is `style-src 'self'`, which blocks every inline style
+ * The page's CSS is `style-src 'self'`, which blocks every inline style
  * attribute. That is deliberate — it is what stops injected markup from
  * restyling the widget — but it means `style="--coin:#f7931a"` is silently
  * dropped and the badge falls back to its CSS default.
@@ -100,13 +100,13 @@ function colorFor(sym) {
  * This was not theoretical: a probe against the running app showed the swatch
  * buttons, the allocation bar and the per-coin bars had ALL been rendering
  * with no colour at all, because every one of them used an inline style. The
- * CSP was right; the markup was wrong.
+ * CSS was right; the markup was wrong.
  *
  * The fix is CSSOM: `el.style.setProperty()` is a script API, not an inline
  * style attribute, so the CSP allows it. The markup therefore carries the
  * values as data attributes and `paintStyles()` applies them after the HTML is
  * in the DOM.
- * ---------------------------------------------------------------------------
+ * -------------------------------------------------------------------------
  */
 function badgeHtml(symbol, size) {
   const b = (state.badges && state.badges[symbol]) || null;
@@ -162,7 +162,7 @@ function paintStyles(root) {
 /**
  * A coin's candlestick chart, as inline SVG.
  *
- * ---------------------------------------------------------------------------
+ * -------------------------------------------------------------------------
  * Where it goes and why
  *
  * Between the ticker and the price — the empty middle of the row. That space
@@ -171,7 +171,7 @@ function paintStyles(root) {
  * "which coin · how it moved · what it costs", left to right, with no extra
  * line of height.
  *
- * ---------------------------------------------------------------------------
+ * -------------------------------------------------------------------------
  * Why candles and not the line that was here before
  *
  * The line was built from candle CLOSES: one number per period, joined up. It
@@ -180,7 +180,7 @@ function paintStyles(root) {
  * four in the same box: the body is open→close, the wick is high→low, and the
  * colour says which way the period closed.
  *
- * ---------------------------------------------------------------------------
+ * -------------------------------------------------------------------------
  * Why the geometry is a separate module
  *
  * `candles.js` is pure (rows in, paths out) and unit-tested on the cases that
@@ -188,7 +188,7 @@ function paintStyles(root) {
  * single candle, a high below its low. This function only measures the box and
  * writes the result into the DOM.
  *
- * ---------------------------------------------------------------------------
+ * -------------------------------------------------------------------------
  * Why the viewBox is fixed and `preserveAspectRatio="none"`
  *
  * The same markup is used in the 13px strip and in the panel, at two different
@@ -196,7 +196,7 @@ function paintStyles(root) {
  * without a re-render on resize. The bodies are FILLED, so stretching them is
  * harmless; the wicks are stroked with `vector-effect: non-scaling-stroke`, so
  * they stay 1px instead of thickening with the box.
- * ---------------------------------------------------------------------------
+ * -------------------------------------------------------------------------
  *
  * @param {string} symbol  e.g. "LDOUSDT"
  * @param {{cls:string}} opts
@@ -346,7 +346,7 @@ function render() {
 /**
  * The per-coin rows in the collapsed strip.
  *
- * ---------------------------------------------------------------------------
+ * -------------------------------------------------------------------------
  * What this is for
  *
  * The strip's summary line is the whole portfolio in one number. That is fine
@@ -355,7 +355,7 @@ function render() {
  * row for it here — its own price and its own change — so the strip answers
  * "what is LDO doing" without opening the panel.
  *
- * ---------------------------------------------------------------------------
+ * -------------------------------------------------------------------------
  * Why the rows are rebuilt rather than updated in place
  *
  * The list is short (at most 8) and it changes only when the user ticks
@@ -547,7 +547,7 @@ function renderAlerts() {
           <div class="alert-meta">Giá: ${Number.isFinite(cur) ? fmtPrice(cur) : '—'}${dist}${tolText}${a.note ? ` · ${esc(a.note)}` : ''}</div>
         </div>
         <div class="alert-actions">
-          <label class="switch" title="Bật/tắt">
+          <label class="switch" title="Bật/Tắt">
             <input type="checkbox" data-toggle="${esc(a.id)}" ${a.enabled === false ? '' : 'checked'} />
             <i></i>
           </label>
@@ -692,7 +692,7 @@ function renderSettings() {
   // the user about a placement they are not using.
   const DOCK_HINT = {
     float: 'Cửa sổ nổi tự do: kéo thanh tiêu đề để di chuyển, kéo viền để đổi kích thước.',
-    edge: '“Sát taskbar”: dải mỏng nằm ngay trên thanh taskbar, trong vùng làm việc nên không che các nút của taskbar.',
+    edge: '“Sát taskbar”: dải mỏng nằm ngay trên thanh taskbar, trong cùng làm việc nên không che các nút của taskbar.',
     taskbar: '“Trong taskbar”: dải nằm cùng hàng với các icon trên thanh taskbar. Bấm vào để bung ra, bấm ra ngoài để thu lại.',
   };
   $('dockHint').textContent = DOCK_HINT[state.dockMode] || DOCK_HINT.float;
@@ -709,7 +709,7 @@ function renderSettings() {
  */
 const THEME_HINT = {
   solid: 'Nền đặc, không nhìn xuyên qua.',
-  midnight: 'Đen tuyệt đối, hợp màn hình OLED.',
+  midnight: 'Đen tuyền đối, hợp màn hình OLED.',
   glass: 'Kính mờ — nền bán trong suốt, tông xanh.',
   clear: 'Trong suốt — nhìn xuyên qua thấy desktop.',
   bare: 'Chỉ chữ — không nền, không viền, không bóng. Nhìn thẳng ra desktop.',
@@ -970,7 +970,7 @@ function syncDisplayChecks() {
   $('emptyNotice').hidden = anyPanel || (state.settings && state.settings.chart !== false);
   $('displayPanelHint').textContent = anyPanel
     ? 'Bỏ tích để ẩn. Ít nhất một mục nên được bật, nếu không bảng sẽ trống.'
-    : 'Đang tắt hết — bảng chi tiết sẽ trống. Tích lại ít nhất một mục.';
+    : 'Đang tắt hết — bảng chỉ tiết sẽ trống. Tích lại ít nhất một mục.';
 
   const anyStrip = ['stripTotal', 'stripPnl', 'stripPct'].some((k) => shows(k));
   $('displayStripHint').textContent = anyStrip
@@ -1055,7 +1055,7 @@ function renderStripCoinChecks() {
  * at most 8 entries, and sending the complete list means the stored value can
  * never be the result of a lost or reordered message.
  *
- * ---------------------------------------------------------------------------
+ * -------------------------------------------------------------------------
  * Why there is a local mirror
  *
  * `state.settings.stripCoins` only changes when the main process pushes the
@@ -1100,7 +1100,7 @@ $('btnResetSize').addEventListener('click', () => {
  *
  * Hover is detected from a document-level mousemove rather than from a sensor
  * element. The old sensor was a real element covering the top strip, which
- * meant it also swallowed clicks there — harmless in a 660px window, but in
+ * means it also swallowed clicks there — harmless in a 660px window, but in
  * dock mode the whole window is 44px tall, so the sensor covered the top half
  * of the summary and clicking it did nothing. A passive listener has no such
  * side effect: it observes the pointer without ever taking a click.
@@ -1151,7 +1151,7 @@ tb.querySelectorAll('.wbtn').forEach((b) => {
   b.addEventListener('click', () => b.blur());
 });
 
-// ------------------------------------------------------------ resize grips
+// ------------------------------------------------------------------ resize grips
 /**
  * The window is transparent and frameless, so Windows draws no resize border.
  * These strips hand the drag to the main process, which follows the cursor.
@@ -1171,7 +1171,7 @@ document.querySelectorAll('.grip').forEach((g) => {
   });
 });
 
-// ------------------------------------------------------------ tabs
+// ------------------------------------------------------------------ tabs
 document.querySelectorAll('.tab').forEach((btn) => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('is-active', b === btn));
@@ -1181,7 +1181,7 @@ document.querySelectorAll('.tab').forEach((btn) => {
   });
 });
 
-// ------------------------------------------------------------ modals
+// ------------------------------------------------------------------ modals
 /**
  * Every modal raises the main process's blur guard while it is open.
  *
@@ -1300,7 +1300,7 @@ $('tradeForm').addEventListener('submit', async (e) => {
   toast(payload.id ? 'Đã cập nhật lệnh' : 'Đã thêm lệnh');
 });
 
-// ------------------------------------------------------------ alert form
+// ------------------------------------------------------------------ alert form
 let alertDirValue = 'above';
 
 const DIR_HINTS = {
@@ -1496,7 +1496,14 @@ $('btnSound').addEventListener('click', () => {
 $('btnData').addEventListener('click', () => api.openDataFolder());
 
 // ------------------------------------------------------------------ IPC wiring
-api.onState(((s) => {
+/**
+ * The full state payload.
+ *
+ * A named function rather than an inline arrow: this handler is the one place
+ * the renderer adopts main-process truth, and it is easier to point at in a
+ * stack trace than an anonymous callback.
+ */
+function onState(s) {
   Object.assign(state, s);
   /**
    * `klines` arrives in the same `{interval, series}` shape as the dedicated
@@ -1517,7 +1524,9 @@ api.onState(((s) => {
    */
   pendingStripCoins = null;
   render();
-});
+}
+api.onState(onState);
+
 /**
  * Recompute value / P&L from the new prices without waiting for a main-process
  * round trip, so the widget moves the instant a tick arrives.
@@ -1587,7 +1596,7 @@ api.onAlertFired((p) => {
   const verb = p.direction === 'touch'
     ? 'chạm'
     : p.direction === 'above' ? 'vượt' : 'xuống';
-  toast(`⚅ ${baseOf(p.symbol)} ${verb} ${fmtPrice(p.level)}`);
+  toast(`⚡ ${baseOf(p.symbol)} ${verb} ${fmtPrice(p.level)}`);
 });
 
 api.getState();

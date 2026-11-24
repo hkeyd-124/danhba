@@ -57,16 +57,23 @@ const INTERVALS = Object.freeze(['5m', '15m', '1h', '4h', '1d']);
 const DEFAULT_INTERVAL = '15m';
 
 /**
- * 24 candles.
+ * 36 candles — the panel's own maximum.
  *
- * One number for every frame, deliberately. 24 × 5m is two hours, 24 × 1h is a
- * day, 24 × 1d is most of a month — and in every case it is a chart the row can
- * actually draw: the panel gives the chart about 60px and the strip about 76px,
- * so 24 candles lands at roughly 2.5–3px per slot, which is the narrowest a
- * candle can be and still show a body and a gap. Asking for 48 would halve the
- * body and turn the chart into a hatched block.
+ * One number for every frame, deliberately. 36 × 5m is three hours, 36 × 1h is
+ * a day and a half, 36 × 1d is over a month — and in every case it is a chart
+ * the row can actually draw.
+ *
+ * The number is set by the WIDEST consumer, not the narrowest. The panel gives
+ * the chart 88px, so 36 candles is a 2.4px slot: a ~1.4px body with a ~1px gap,
+ * which still reads as a candle. The strip only draws 18 of them (it merges the
+ * series down — see CANDLE_MAX_STRIP in app.js), so it is never short of data.
+ *
+ * Fetching 24 and drawing 36 would have been the bug: `downsample` only ever
+ * merges, so the panel would have silently shown 24 candles while claiming the
+ * full window. Asking for 48 would halve the body and turn the chart into a
+ * hatched block.
  */
-const DEFAULT_LIMIT = 24;
+const DEFAULT_LIMIT = 36;
 
 const INTERVAL_MS = Object.freeze({
   '5m': 5 * 60 * 1000,

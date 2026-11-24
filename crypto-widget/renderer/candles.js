@@ -64,8 +64,8 @@
     const out = [];
     for (const r of list) {
       if (!r || typeof r !== 'object') continue;
-      const o = num(r.o);
-      const h = num(r.h);
+      const o = num(r.o) ;
+const h = num(r.h);
       const l = num(r.l);
       const c = num(r.c);
       if (o === null || h === null || l === null || c === null) continue;
@@ -110,13 +110,13 @@
    * ---------------------------------------------------------------------------
    * Why this exists
    *
-   * The panel gives the chart 60px and the strip 76px, but the strip row is
+   * The panel gives the chart 88px and the strip 84px, but the strip row is
    * only 11px tall. Drawn at 24 candles, the strip's slot is 3.2px: measured in
    * a real browser at 4x, the bodies and wicks blur into a single jagged line —
    * there is no room for a body AND a gap AND a wick in 3px.
    *
-   * Fewer, wider candles fix it. Twelve candles in 76px is a 6.3px slot, so the
-   * body is ~4px with a ~2px gap and the wick is still a visible hairline.
+   * Fewer, wider candles fix it. Twelve candles in 84px is a 7px slot, so the
+   * body is ~4px with a >2px gap and the wick is still a visible hairline.
    *
    * ---------------------------------------------------------------------------
    * Why it MERGES rather than truncates
@@ -168,7 +168,7 @@
   /**
    * Lay the candles out in a pixel box.
    *
-   * The box is `width` x `height` with `padY` of air at the top and bottom, and
+   * The box is `width` � `height` with `padY` of air at the top and bottom, and
    * `bodyRatio` of each candle's slot given to the body (the rest is the gap).
    *
    * @param {Array} rows  candles, oldest first
@@ -234,7 +234,18 @@
      * would hang off the right edge if the step were any larger than this.
      */
     const step = w / n;
-    const bodyW = Math.max(1, round(step * bodyRatio));
+    /**
+     * The body can never be wider than its own slot, and never wider than the
+     * box.
+     *
+     * `round()` is what makes this necessary: at 36 candles in an 88px box the
+     * slot is 2.44px, so a 0.6 ratio gives 1.46px which rounds to 1 — fine. But
+     * a caller that passes a large `bodyRatio` with a narrow box (or a series
+     * of 2 candles in a 3px box) can round the body UP past the slot, and then
+     * the last candle's body hangs off the right edge of the viewBox. The
+     * clamp is one line and removes the whole class of overflow.
+     */
+    const bodyW = Math.max(1, Math.min(w, round(step * bodyRatio)));
 
     /** Price -> y, clamped to the box so rounding can never draw outside it. */
     const yOf = (p) => {
@@ -254,7 +265,9 @@
       const up = c.c >= c.o;
 
       const cx = round(i * step + step / 2);
-      const bodyX = round(i * step + (step - bodyW) / 2);
+      // Clamped to the box: rounding at the right edge must not push the last
+      // body past `w`, which is what made candles spill out of the frame.
+      const bodyX = Math.max(0, Math.min(w - bodyW, round(i * step + (step - bodyW) / 2)));
       const wickTop = round(yOf(c.h));
       const wickBottom = round(yOf(c.l));
       const bodyTop = round(yOf(Math.max(c.o, c.c)));

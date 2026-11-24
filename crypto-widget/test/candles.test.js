@@ -15,6 +15,17 @@ const assert = require('node:assert');
 const { clean, extent, downsample, build } = require('../renderer/candles');
 
 /** A usable candle. */
+/** A deterministic OHLC series of `n` rows, for the geometry grid tests. */
+function series(n) {
+  const rows = [];
+  for (let i = 0; i < n; i += 1) {
+    const o = 100 + Math.sin(i) * 2;
+    const cl = o * 1.01;
+    rows.push(c(i, o, Math.max(o, cl) * 1.01, Math.min(o, cl) * 0.99, cl));
+  }
+  return rows;
+}
+
 function c(t, o, h, l, cl) {
   return { t, o, h, l, c: cl };
 }
@@ -151,4 +162,63 @@ test('a single candle has a step and does not divide by zero', () => {
   assert.equal(r.count, 1);
   assert.ok(Number.isFinite(r.candles[0].x));
   assert.ok(r.candles[0].w >= 1);
+});
+
+/**
+ * No candle may leave the box, at any size or count.
+ *
+ * This is the regression guard for the bug the user reported as "candles spill
+ * out of the token's frame". Two separate causes were found:
+ *
+ *   1. `candleHtml` built its viewBox from `CANDLE_BOX.w` / `.h` while the
+ *      object declares `width` / `height`, so the attribute was literally
+ *      "0 0 undefined undefined" and the browser fell back to a default box.
+ *   2. `bodyX` was rounded without a clamp, so at the right edge a body could
+ *      round one pixel past `width`.
+ *
+ * (1) is a renderer concern and is asserted in spark.e2e.js; (2) is geometry
+ * and is asserted here, over a grid of boxes and series lengths rather than one
+ * hand-picked case.
+ */
+test('no candle ever leaves the box, across sizes and series lengths', () => {
+  const boxes = [[100, 30], [88, 16], [84, 11], [60, 16], [40, 11], [20, 8]];
+  const counts = [1, 2, 3, 5, 12, 18, 24, 36, 60, 120];
+  let checked = 0;
+  for (const [width, height] of boxes) {
+    for (const n of counts) {
+      const rows = [];
+      for (let i = 0; i < n; i += 1) {
+        const o = 100 + Math.sin(i) * 2;
+        const cl = o * 1.01;
+        rows.push(c(i, o, Math.max(o, cl) * 1.01, Math.min(o, cl) * 0.99, cl));
+      }
+      const r = build(rows, { width, height, padY: 2, bodyRatio: 0.58, maxCandles: n });
+      for (const k of r.candles) {
+        checked += 1;
+        assert.ok(k.x >= 0, `x >= 0 (${width}x${height}, n=${n})`);
+        assert.ok(k.x + k.w <= width, `body right edge inside ${width} (n=${n})`);
+        assert.ok(k.bodyTop >= 0, `body top >= 0 (${width}x${height}, n=${n})`);
+        assert.ok(k.bodyTop + k.bodyH <= height, `body bottom inside ${height} (n=${n})`);
+        assert.ok(k.wickTop >= 0, `wick top >= 0 (${width}x${height}, n=${n})`);
+        assert.ok(k.wickBottom <= height, `wick bottom inside ${height} (n=${n})`);
+      }
+    }
+  }
+  assert.ok(checked > 1000, `the grid actually exercised the geometry (${checked} candles)`);
+});
+
+test('bodies keep a visible gap at the shipped candle counts', () => {
+  // 36 in the panel and 18 in the strip are what app.js asks for. If a body
+  // ever grows to touch its neighbour the chart reads as a solid block, which
+  // is the "one jagged line" failure the strip was already fixed for once.
+  const panel = build(series(36), { width: 88, height: 16, padY: 2, bodyRatio: 0.58, maxCandles: 36 });
+  const strip = build(series(18), { width: 84, height: 11, padY: 2, bodyRatio: 0.58, maxCandles: 18 });
+  for (const [name, r] of [['panel', panel], ['strip', strip]]) {
+    let minGap = Infinity;
+    for (let i = 1; i < r.candles.length; i += 1) {
+      const gap = r.candles[i].x - (r.candles[i - 1].x + r.candles[i - 1].w);
+      if (gap < minGap) minGap = gap;
+    }
+    assert.ok(minGap >= 1, `${name}: at least 1px between bodies (got ${minGap})`);
+  }
 });

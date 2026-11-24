@@ -14,7 +14,7 @@
  * The SVG has a fixed 100x30 viewBox and `preserveAspectRatio="none"`, so the
  * paths are stretched to whatever width the row gives them. A FILLED body
  * stretches harmlessly — a rectangle is still a rectangle. A STROKED wick would
- * not: a 1px line in a 76px strip would become a 3px slab in the 300px panel.
+ * not: a 1px line in a 84px strip would become a 3px slab in the 300px panel.
  * `vector-effect: non-scaling-stroke` keeps the wick at its declared width in
  * every box, which is why the two are styled differently.
  *
@@ -66,40 +66,40 @@
 
 /* ================================================================ panel rows */
 /**
- * 60x16 in the panel, centred in the gap.
+ * 88x16 in the panel, centred in the gap.
  *
  * The first version of the line chart was `flex: 1 1 auto`, which let the SVG
  * eat the whole gap between the name and the quantity — measured at 121px in a
  * 300px row. It fitted, but it dominated the row: the chart became the loudest
- * thing on a line whose subject is the coin. A fixed 60px reads as a shape
+ * thing on a line whose subject is the coin. A fixed 88px reads as a shape
  * beside the name, which is what the reference does.
  *
- * `margin: 0 auto` with `flex: 0 1 60px` centres it in whatever gap is left,
+ * `margin: 0 auto` with `flex: 0 1 88px` centres it in whatever gap is left,
  * instead of pinning it to the name.
  */
 .cd-pos {
-  flex: 0 1 60px;
-  width: 60px;
+  flex: 0 1 88px;
+  width: 88px;
   height: 16px;
   margin: 0 auto;
 }
 
 /* ================================================================ strip rows */
 /**
- * 76x11 in the 13px strip row.
+ * 84x11 in the 13px strip row.
  *
  * 11px, not 13: the row is 13px and the chart needs a pixel of air above and
- * below or it touches the row above's descenders. 76px wide, centred in the
+ * below or it touches the row above's descenders. 84px wide, centred in the
  * gap — the same reasoning as the panel: at `flex: 1` it measured 146px and
  * pushed the price into a corner.
  *
- * The strip merges its series down to 12 candles (see CANDLE_MAX_STRIP in
- * app.js): at 24 the slot is 3.2px and the chart blurs into a single jagged
- * line. 12 gives a 6.3px slot, so the body is ~4px with a ~2px gap.
+ * The strip merges its series down to 18 candles (see CANDLE_MAX_STRIP in
+ * app.js): at 84px that is a 4.7px slot, so the body is ~2.7px with a ~2px
+ * gap. Going wider than 18 in an 11px-tall row blurs the wick into the body.
  */
 .cd-strip {
-  flex: 0 1 76px;
-  width: 76px;
+  flex: 0 1 84px;
+  width: 84px;
   height: 11px;
   margin: 0 auto;
 }

@@ -209,22 +209,23 @@ function paintStyles(root) {
  * The paths were well formed, which is why a "does a path exist" assertion
  * passed; only a measurement caught it.
  */
-const CANDLE_BOX = { width: 100, height: 30, padY: 2, bodyRatio: 0.66 };
+const CANDLE_BOX = { width: 100, height: 30, padY: 2, bodyRatio: 0.58 };
 
 /**
  * How many candles each box can actually show.
  *
- * Measured, not guessed. The panel gives the chart 60px and the strip 76px, but
- * the strip row is only 11px tall — and at 24 candles the strip's slot is 3.2px.
- * Rendered in a real browser at 4x that blurs into a single jagged line: there
- * is no room for a body AND a gap AND a wick in three pixels.
+ * Measured, not guessed. The panel gives the chart 88px and the strip 84px, but
+ * the strip row is only 11px tall. At 18 candles the strip's slot is 4.7px,
+ * which leaves a ~2.7px body and a ~2px gap — the smallest that still reads as
+ * a candle rather than a smear. Pushing past that in an 11px row blurs the wick
+ * into the body.
  *
- * So the strip merges its series down to 12. Merging (not truncating) keeps the
+ * So the strip merges its series down to 18. Merging (not truncating) keeps the
  * full window and makes each candle a true OHLC roll-up of the ones it replaces
- * — see `downsample` in candles.js. The panel has the height for all 24.
+ * — see `downsample` in candles.js. The panel has the height for 36.
  */
-const CANDLE_MAX_PANEL = 24;
-const CANDLE_MAX_STRIP = 12;
+const CANDLE_MAX_PANEL = 36;
+const CANDLE_MAX_STRIP = 18;
 
 function candleHtml(symbol, opts) {
   const o = opts || {};
@@ -245,7 +246,7 @@ function candleHtml(symbol, opts) {
    * Four paths, not forty: every rising body in one, every falling body in
    * another, and the same for the wicks. See the note in candles.js.
    */
-  return `<svg class="${cls}" viewBox="0 0 ${CANDLE_BOX.w} ${CANDLE_BOX.h}" preserveAspectRatio="none" aria-hidden="true" focusable="false">`
+  return `<svg class="${cls}" viewBox="0 0 ${CANDLE_BOX.width} ${CANDLE_BOX.height}" preserveAspectRatio="none" aria-hidden="true" focusable="false">`
     + `<path class="cd-wick cd-wick-up" d="${built.wickPathUp}" />`
     + `<path class="cd-wick cd-wick-down" d="${built.wickPathDown}" />`
     + `<path class="cd-body cd-body-up" d="${built.bodyPathUp}" />`
@@ -1099,7 +1100,7 @@ $('btnResetSize').addEventListener('click', () => {
  *
  * Hover is detected from a document-level mousemove rather than from a sensor
  * element. The old sensor was a real element covering the top strip, which
- * meant it also swallowed clicks there — harmless in a 660px window, but in
+ * means it also swallowed clicks there — harmless in a 660px window, but in
  * dock mode the whole window is 44px tall, so the sensor covered the top half
  * of the summary and clicking it did nothing. A passive listener has no such
  * side effect: it observes the pointer without ever taking a click.
@@ -1495,7 +1496,7 @@ $('btnSound').addEventListener('click', () => {
 $('btnData').addEventListener('click', () => api.openDataFolder());
 
 // ------------------------------------------------------------------ IPC wiring
-api.onState((s) => {
+api.onState(hs) => {
   Object.assign(state, s);
   /**
    * `klines` arrives in the same `{interval, series}` shape as the dedicated

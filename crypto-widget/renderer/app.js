@@ -1100,7 +1100,7 @@ $('btnResetSize').addEventListener('click', () => {
  *
  * Hover is detected from a document-level mousemove rather than from a sensor
  * element. The old sensor was a real element covering the top strip, which
- * means it also swallowed clicks there — harmless in a 660px window, but in
+ * meant it also swallowed clicks there — harmless in a 660px window, but in
  * dock mode the whole window is 44px tall, so the sensor covered the top half
  * of the summary and clicking it did nothing. A passive listener has no such
  * side effect: it observes the pointer without ever taking a click.
@@ -1151,7 +1151,7 @@ tb.querySelectorAll('.wbtn').forEach((b) => {
   b.addEventListener('click', () => b.blur());
 });
 
-// ------------------------------------------------------------------ resize grips
+// ------------------------------------------------------------ resize grips
 /**
  * The window is transparent and frameless, so Windows draws no resize border.
  * These strips hand the drag to the main process, which follows the cursor.
@@ -1171,7 +1171,7 @@ document.querySelectorAll('.grip').forEach((g) => {
   });
 });
 
-// ------------------------------------------------------------------ tabs
+// ------------------------------------------------------------ tabs
 document.querySelectorAll('.tab').forEach((btn) => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('is-active', b === btn));
@@ -1181,7 +1181,7 @@ document.querySelectorAll('.tab').forEach((btn) => {
   });
 });
 
-// ------------------------------------------------------------------ modals
+// ------------------------------------------------------------ modals
 /**
  * Every modal raises the main process's blur guard while it is open.
  *
@@ -1300,7 +1300,7 @@ $('tradeForm').addEventListener('submit', async (e) => {
   toast(payload.id ? 'Đã cập nhật lệnh' : 'Đã thêm lệnh');
 });
 
-// ------------------------------------------------------------------ alert form
+// ------------------------------------------------------------ alert form
 let alertDirValue = 'above';
 
 const DIR_HINTS = {
@@ -1496,7 +1496,7 @@ $('btnSound').addEventListener('click', () => {
 $('btnData').addEventListener('click', () => api.openDataFolder());
 
 // ------------------------------------------------------------------ IPC wiring
-api.onState(hs) => {
+api.onState(((s) => {
   Object.assign(state, s);
   /**
    * `klines` arrives in the same `{interval, series}` shape as the dedicated
@@ -1587,7 +1587,7 @@ api.onAlertFired((p) => {
   const verb = p.direction === 'touch'
     ? 'chạm'
     : p.direction === 'above' ? 'vượt' : 'xuống';
-  toast(`⚡ ${baseOf(p.symbol)} ${verb} ${fmtPrice(p.level)}`);
+  toast(`⚅ ${baseOf(p.symbol)} ${verb} ${fmtPrice(p.level)}`);
 });
 
 api.getState();

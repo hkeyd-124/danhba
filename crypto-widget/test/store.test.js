@@ -4,12 +4,12 @@
  *
  * The rule these protect: a data file written by an older version must keep
  * behaving exactly as it did. Adding the 'touch' alert kind must not silently
- * turn an existing "v\u01b0\u1ee3t l\u00ean tr\u00ean" alert into something else, and must not
+ * turn an existing "vượt lên trên" alert into something else, and must not
  * attach a tolerance to a kind that ignores it.
  *
  * The same rule now covers the candle frame: a file written before the coin
  * chart became a candlestick has no `candleInterval`, and it must come back as
- * the frame the old line chart was already built from \u2014 not as a 400 sent to
+ * the frame the old line chart was already built from — not as a 400 sent to
  * the exchange.
  */
 const test = require('node:test');
@@ -33,13 +33,13 @@ function loadWith(data) {
   return store;
 }
 
-test('schema version is 7', () => {
-  assert.equal(SCHEMA_VERSION, 7);
+test('schema version is 9', () => {
+  assert.equal(SCHEMA_VERSION, 9);
 });
 
 test('a v5 file gets stripCoins: [], so the strip draws the summary alone', () => {
   // v5 had no per-coin rows. An empty list means "summary line only", which is
-  // exactly what v5 drew \u2014 so an upgrade changes nothing until the user ticks
+  // exactly what v5 drew — so an upgrade changes nothing until the user ticks
   // a coin.
   const store = loadWith({ version: 5, settings: { dockMode: 'taskbar' } });
   assert.deepEqual(store.settings.stripCoins, []);
@@ -66,7 +66,7 @@ test('stripCoins is de-duplicated and capped', () => {
 
 test('a v3 file gets stripWidth: null, so the strip keeps its old width', () => {
   // v3 had one width for both the panel and the strip. Leaving stripWidth null
-  // makes the strip fall back to dockWidth \u2014 exactly what v3 drew \u2014 so an
+  // makes the strip fall back to dockWidth — exactly what v3 drew — so an
   // existing install looks unchanged until the user drags the strip.
   const store = loadWith({ version: 3, settings: { dockMode: 'taskbar', dockWidth: 420 } });
   assert.equal(store.settings.stripWidth, null);

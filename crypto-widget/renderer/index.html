@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="dock.css" />
 <link rel="stylesheet" href="chart.css" />
 <link rel="stylesheet" href="candles.css" />
+<link rel="stylesheet" href="futures.css" />
 </head>
 <body>
 <!--
@@ -59,6 +60,14 @@
       is: [logo] TICKER ....... price  change
     -->
     <div class="cv-coins" id="cvCoins" hidden></div>
+    <!--
+      Pinned demo-futures rows.
+
+      A separate container from `.cv-coins` on purpose: a coin row is a holding
+      and a futures row is a bet, and the two pin switches must be able to hide
+      one without touching the other. Filled by renderFutureStrip().
+    -->
+    <div class="cv-futures" id="cvFutures" hidden></div>
   </section>
 
   <!-- ============ expanded body ============ -->
@@ -114,6 +123,7 @@
       <button class="tab is-active" data-tab="positions" role="tab">Danh mục</button>
       <button class="tab" data-tab="trades" role="tab">Lệnh</button>
       <button class="tab" data-tab="alerts" role="tab">Cảnh báo</button>
+      <button class="tab" data-tab="futures" role="tab">Future</button>
     </nav>
 
     <!-- ---------- positions ---------- -->
@@ -166,6 +176,30 @@
       <div class="alert-foot">
         <button class="btn btn-ghost btn-sm" id="btnTestAlert">Thử thông báo</button>
         <button class="btn btn-ghost btn-sm" id="btnSound">Âm thanh: Bật</button>
+      </div>
+    </section>
+
+    <!-- ---------- demo futures ---------- -->
+    <section class="panel" id="panel-futures">
+      <div class="panel-head">
+        <span class="panel-title">Future demo</span>
+        <button class="btn btn-primary btn-sm" id="btnAddFuture">+ Mở lệnh</button>
+      </div>
+      <!--
+        The demo banner is not decoration. A row that looks like a real
+        position and is not one is the most dangerous thing this app could
+        show, so the panel says what it is before it says anything else.
+      -->
+      <div class="fut-note">Lệnh mô phỏng — không dùng tiền thật, không kết nối tài khoản sàn.</div>
+      <div class="list" id="futureList"></div>
+      <div class="empty" id="futureEmpty" hidden>
+        <div class="empty-ico">📈</div>
+        <p>Chưa có lệnh future nào.</p>
+        <p class="muted">Bấm “Mở lệnh” để tạo một lệnh demo.</p>
+      </div>
+      <div class="alert-foot">
+        <button class="btn btn-ghost btn-sm" id="btnPinPnl">Ghim PnL: Bật</button>
+        <button class="btn btn-ghost btn-sm" id="btnPinLiq">Ghim thanh lý: Bật</button>
       </div>
     </section>
 
@@ -421,6 +455,63 @@
     </form>
   </div>
 
+  <!-- ============ modal: demo futures ============ -->
+  <div class="modal" id="futureModal" hidden>
+    <form class="sheet" id="futureForm" autocomplete="off">
+      <div class="sheet-head">
+        <h2 id="futureTitle">Mở lệnh future demo</h2>
+        <button type="button" class="wbtn" data-close="futureModal">✕</button>
+      </div>
+      <input type="hidden" id="futureId" />
+
+      <div class="fut-note">Lệnh mô phỏng — không dùng tiền thật, không cần API key.</div>
+
+      <label class="field">
+        <span>Đồng coin</span>
+        <input id="futureSymbol" placeholder="BTC, ETH, SOL…" required />
+        <em class="hint">Tự thêm USDT nếu bạn không ghi.</em>
+      </label>
+
+      <div class="field">
+        <span>Hướng</span>
+        <div class="seg" id="futureSide">
+          <button type="button" class="seg-btn is-active" data-side="LONG">Long</button>
+          <button type="button" class="seg-btn" data-side="SHORT">Short</button>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <label class="field">
+          <span>Ký quỹ (USDT)</span>
+          <input id="futureMargin" type="number" step="any" min="0" placeholder="100" required />
+        </label>
+        <label class="field">
+          <span>Đòn bẩy (x)</span>
+          <input id="futureLeverage" type="number" step="1" min="1" max="125" value="10" required />
+        </label>
+      </div>
+
+      <label class="field">
+        <span>Giá vào (USDT)</span>
+        <input id="futureEntry" type="number" step="any" min="0" placeholder="0.00" required />
+        <em class="hint">Để trống để dùng giá thị trường hiện tại.</em>
+      </label>
+
+      <label class="field">
+        <span>Ghi chú</span>
+        <input id="futureNote" maxlength="120" placeholder="Không bắt buộc" />
+      </label>
+
+      <div class="calc" id="futureCalc">Nhập ký quỹ và đòn bẩy để xem khối lượng và giá thanh lý.</div>
+      <p class="form-error" id="futureError" hidden></p>
+
+      <div class="sheet-actions">
+        <button type="button" class="btn btn-ghost" data-close="futureModal">Huỷ</button>
+        <button type="submit" class="btn btn-primary">Mở lệnh</button>
+      </div>
+    </form>
+  </div>
+
   <!-- ============ modal: alert ============ -->
   <div class="modal" id="alertModal" hidden>
     <form class="sheet" id="alertForm" autocomplete="off">
@@ -486,5 +577,6 @@
 <script src="chart.js"></script>
 <script src="candles.js"></script>
 <script src="app.js"></script>
+<script src="futures-ui.js"></script>
 </body>
 </html>

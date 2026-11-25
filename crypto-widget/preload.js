@@ -19,6 +19,10 @@ contextBridge.exposeInMainWorld('cpw', {
   deleteAlert: (id) => ipcRenderer.invoke('delete-alert', id),
   toggleAlert: (id, enabled) => ipcRenderer.invoke('toggle-alert', { id, enabled }),
   testAlert: () => ipcRenderer.invoke('test-alert'),
+  // demo futures — local book only, no exchange account, no API key
+  saveFuture: (f) => ipcRenderer.invoke('save-future', f),
+  deleteFuture: (id) => ipcRenderer.invoke('delete-future', id),
+  pinFutures: (pins) => ipcRenderer.invoke('pin-futures', pins),
   patchSettings: (p) => ipcRenderer.invoke('patch-settings', p),
   window: (action) => ipcRenderer.invoke('window', action),
   blurGuard: (on) => ipcRenderer.invoke('blur-guard', on),

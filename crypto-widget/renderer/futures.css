@@ -1,0 +1,143 @@
+/*
+ * Demo futures — panel and pinned strip.
+ *
+ * Kept in its own file rather than appended to styles.css / dock.css: the
+ * feature is self-contained (one panel, one strip row), and a reader looking
+ * for "how is a futures row drawn" should not have to scroll past 400 lines of
+ * portfolio styling to find it. Loaded after both, so it can override.
+ */
+
+/* ================================================================ demo futures */
+/*
+ * The demo banner.
+ *
+ * Not decoration: a row that looks like a real position and is not one is the
+ * most dangerous thing this app could show, so the panel states what it is
+ * before it states anything else. Amber, not red — it is a caution, not an
+ * error, and red would read as "something is broken".
+ */
+.fut-note {
+  flex: 0 0 auto; margin: 0 2px 8px; padding: 6px 9px; border-radius: 8px;
+  background: rgba(240,180,41,.1); border: 1px solid rgba(240,180,41,.28);
+  color: var(--warn); font-size: 10.5px; line-height: 1.35;
+}
+
+.fut {
+  padding: 9px 10px; border-radius: 11px; background: var(--card);
+  border: 1px solid transparent; margin-bottom: 6px;
+  transition: background .15s, border-color .15s;
+}
+.fut:hover { background: var(--card-2); border-color: var(--line); }
+.fut-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.fut-sym { font-weight: 700; letter-spacing: .2px; flex: 0 0 auto; }
+.fut-lev {
+  font-size: 10px; font-weight: 700; color: var(--muted);
+  background: rgba(255,255,255,.06); padding: 2px 5px; border-radius: 5px;
+  flex: 0 0 auto;
+}
+.fut-pnl {
+  margin-left: auto; font-size: 11.5px; font-weight: 650;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.fut-sub {
+  display: flex; align-items: center; gap: 8px; margin-top: 4px;
+  font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums;
+  flex-wrap: wrap;
+}
+/*
+ * The liquidation line.
+ *
+ * It gets its own row and a heavier weight than the rest of the card: it is
+ * the number that decides whether the position survives, and burying it in the
+ * sub-line would make it read as one more statistic.
+ */
+.fut-liq {
+  margin-top: 5px; font-size: 11px; font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.fut-dist { font-weight: 500; opacity: .8; margin-left: 4px; }
+.fut-actions { display: flex; justify-content: flex-end; margin-top: 4px; }
+
+/*
+ * Pinned demo-futures rows.
+ *
+ * Same 13px line box as a coin row, because they share the column and the
+ * strip's height is derived from the two counts added together. The tag is
+ * fixed-width so the two rows' numbers line up with each other and with the
+ * coin rows above them — a ragged left edge in a 40px-tall strip reads as
+ * noise.
+ */
+.cv-futures {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+}
+
+.cv-fut {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 13px;
+  line-height: 13px;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.cv-fut-tag {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .3px;
+  color: var(--muted);
+  flex: 0 0 auto;
+  min-width: 26px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cv-fut-val {
+  font-size: 9.5px;
+  font-weight: 650;
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cv-fut-sub {
+  font-size: 9px;
+  flex: 0 0 auto;
+  min-width: 40px;
+  text-align: right;
+}
+
+/*
+ * The strip becomes a column when it holds EITHER kind of row.
+ *
+ * The coin rule above keys off `.cv-coins`; this one has to cover the futures
+ * container too, or a strip with only a futures row pinned would lay that row
+ * out beside the summary instead of under it.
+ */
+.widget.is-collapsed .collapsed-view:has(.cv-futures:not([hidden])) {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+.widget.is-collapsed .collapsed-view:has(.cv-futures:not([hidden])) .cv-value {
+  font-size: 12.5px;
+}
+.widget.is-collapsed .collapsed-view:has(.cv-futures:not([hidden])) .cv-pnl {
+  font-size: 10px;
+}
+.widget.is-collapsed .collapsed-view:has(.cv-futures:not([hidden])) .cv-pct {
+  font-size: 9px;
+}

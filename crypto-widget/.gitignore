@@ -3,3 +3,7 @@ dist/
 shots/
 shots-*/
 *.log
+build/icon.png
+build/icon-256.png
+build/tray.png
+package-lock.json

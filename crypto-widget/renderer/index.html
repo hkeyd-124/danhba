@@ -480,16 +480,36 @@
         </div>
       </div>
 
+      <!--
+        Margin mode. Isolated is the default: it is the safer of the two to be
+        wrong about, because an isolated position dies sooner, so a mislabelled
+        one understates the danger rather than overstating it.
+      -->
+      <div class="field">
+        <span>Chế độ ký quỹ</span>
+        <div class="seg" id="futureMode">
+          <button type="button" class="seg-btn is-active" data-mode="isolated">Isolate</button>
+          <button type="button" class="seg-btn" data-mode="cross">Cross</button>
+        </div>
+        <em class="hint" id="futureModeHint">Isolate: ký quỹ riêng, lệnh tự chết khi lỗ hết phần ký quỹ của nó.</em>
+      </div>
+
       <div class="grid2">
         <label class="field">
-          <span>Ký quỹ (USDT)</span>
-          <input id="futureMargin" type="number" step="any" min="0" placeholder="100" required />
+          <span>Khối lượng (đơn vị)</span>
+          <input id="futureQty" type="number" step="any" min="0" placeholder="0.5" required />
         </label>
         <label class="field">
           <span>Đòn bẩy (x)</span>
           <input id="futureLeverage" type="number" step="1" min="1" max="125" value="10" required />
         </label>
       </div>
+
+      <label class="field">
+        <span>Ký quỹ riêng (USDT)</span>
+        <input id="futureMargin" type="number" step="any" min="0" placeholder="100" required />
+        <em class="hint" id="futureMarginHint">Tối thiểu theo khối lượng và đòn bẩy. Thêm vào đây để đẩy giá thanh lý ra xa.</em>
+      </label>
 
       <label class="field">
         <span>Giá vào (USDT)</span>
@@ -502,7 +522,7 @@
         <input id="futureNote" maxlength="120" placeholder="Không bắt buộc" />
       </label>
 
-      <div class="calc" id="futureCalc">Nhập ký quỹ và đòn bẩy để xem khối lượng và giá thanh lý.</div>
+      <div class="calc" id="futureCalc">Nhập khối lượng và đòn bẩy để xem ký quỹ tối thiểu và giá thanh lý.</div>
       <p class="form-error" id="futureError" hidden></p>
 
       <div class="sheet-actions">

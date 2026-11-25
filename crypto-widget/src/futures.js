@@ -7,9 +7,9 @@
  *
  * Nothing in this module touches an exchange. There is no API key, no order,
  * no account, no money. A position is a row in the local JSON file: a symbol,
- * a side, a leverage, a margin and an entry price. Everything else — PnL,
- * ROE, the liquidation price — is DERIVED from the live mark price the price
- * feed already fetches for the spot portfolio.
+ * a side, a margin mode, a leverage, a quantity, a margin and an entry price.
+ * Everything else — PnL, ROE, the liquidation price — is DERIVED from the live
+ * mark price the price feed already fetches for the spot portfolio.
  *
  * That is the whole feature: a calculator that keeps its own book. It is
  * labelled "demo" everywhere it appears, because a number that looks like a
@@ -22,6 +22,24 @@
  * computed it, the strip and the panel could disagree about where a position
  * dies, and there would be no way to test either. One function, called by the
  * main process, sent to both surfaces.
+ * ---------------------------------------------------------------------------
+ * Isolated vs cross — the one place the two really differ
+ *
+ * ISOLATED: the position's own margin is the only thing standing behind it.
+ * It dies when its own loss has eaten that margin down to the maintenance
+ * requirement. Nothing else in the book can save it, and it cannot hurt
+ * anything else.
+ *
+ * CROSS: every cross position shares one pool. A position does not die on its
+ * own — the ACCOUNT dies, when the pool's equity falls to the sum of all
+ * maintenance requirements. So a cross position's liquidation price is not a
+ * property of that position alone: it depends on the other cross positions and
+ * on where they are marked. That is why `computeFutures` marks in two passes
+ * and why `crossLiquidation` takes the pool as an argument.
+ *
+ * Modelling this honestly matters more than modelling it simply: a cross
+ * position shown with an isolated liquidation price would tell the user they
+ * are 9% from death when they are in fact 40% away, or the reverse.
  * ---------------------------------------------------------------------------
  */
 
@@ -37,6 +55,9 @@ const MAX_LEVERAGE = 125;
 /** A position smaller than this is treated as closed. */
 const EPS = 1e-9;
 
+/** The two margin modes, in the order the UI shows them. */
+const MARGIN_MODES = ['isolated', 'cross'];
+
 function num(v, fallback = 0) {
   const n = typeof v === 'number' ? v : parseFloat(v);
   return Number.isFinite(n) ? n : fallback;
@@ -49,7 +70,19 @@ function normalizeSide(raw) {
 }
 
 /**
- * Liquidation price for an isolated-margin position.
+ * 'cross' | 'CROSS' | 'chéo' -> 'cross'; anything else -> 'isolated'.
+ *
+ * Isolated is the default because it is the safer of the two to be wrong
+ * about: an isolated position dies sooner, so a mislabelled one understates
+ * the danger rather than overstating it.
+ */
+function normalizeMarginMode(raw) {
+  const s = String(raw || '').trim().toLowerCase();
+  return s === 'cross' ? 'cross' : 'isolated';
+}
+
+/**
+ * Liquidation price for an ISOLATED position, from leverage alone.
  *
  * Binance's own formula, with the maintenance margin folded in:
  *
@@ -60,6 +93,10 @@ function normalizeSide(raw) {
  * exchange shows for a position with no extra margin added. It is an ESTIMATE:
  * the real figure depends on the maintenance-margin bracket, which depends on
  * notional size, and on funding. The UI says "ước tính" for that reason.
+ *
+ * This is the "required margin only" case. When the user has posted MORE than
+ * the required margin, use `isolatedLiquidation`, which takes the actual
+ * margin into account.
  *
  * @param {number} entry
  * @param {string} side
@@ -77,18 +114,87 @@ function liquidationPrice(entry, side, leverage) {
 }
 
 /**
+ * Liquidation price for an ISOLATED position, from its actual margin.
+ *
+ * The position dies when its loss has consumed everything above the
+ * maintenance requirement:
+ *
+ *   buffer = margin - MMR * notional
+ *   LONG : entry - buffer / qty
+ *   SHORT: entry + buffer / qty
+ *
+ * With margin equal to the required margin this reduces exactly to
+ * `liquidationPrice`, which is what the tests pin down. With extra margin
+ * added it moves further away — the whole point of adding margin.
+ *
+ * @param {number} entry
+ * @param {string} side
+ * @param {number} qty
+ * @param {number} margin
+ * @returns {number} 0 when the inputs cannot produce a meaningful price
+ */
+function isolatedLiquidation(entry, side, qty, margin) {
+  const e = num(entry);
+  const q = num(qty);
+  const m = num(margin);
+  if (!(e > 0) || !(q > 0) || !(m > 0)) return 0;
+  const buffer = m - MMR * q * e;
+  if (!(buffer > 0)) return 0;
+  const p = normalizeSide(side) === 'LONG' ? e - buffer / q : e + buffer / q;
+  return p > 0 ? p : 0;
+}
+
+/**
+ * Liquidation price for a CROSS position, given the shared pool.
+ *
+ * The account dies when the pool's equity reaches the sum of every cross
+ * position's maintenance requirement. Holding the other positions at their
+ * current mark, the move in THIS position's price that gets there is:
+ *
+ *   delta = (equity - maintenance) / qty
+ *   LONG : mark - delta      (a long dies on the way down)
+ *   SHORT: mark + delta      (a short dies on the way up)
+ *
+ * When `equity` is already at or below `maintenance`, delta is <= 0 and the
+ * returned price lands on the wrong side of the mark — which is exactly the
+ * signal that the account is already liquidatable. `markPosition` reads that
+ * as `liquidated`.
+ *
+ * @param {object} pos   a marked position (needs mark, qty, side)
+ * @param {number} equity      pool equity: sum(margin + pnl) over cross rows
+ * @param {number} maintenance sum(MMR * notional) over cross rows
+ * @returns {number} 0 when the inputs cannot produce a meaningful price
+ */
+function crossLiquidation(pos, equity, maintenance) {
+  const p = pos || {};
+  const mark = num(p.mark);
+  const q = num(p.qty);
+  if (!(mark > 0) || !(q > 0)) return 0;
+  const delta = (num(equity) - num(maintenance)) / q;
+  const price = normalizeSide(p.side) === 'LONG' ? mark - delta : mark + delta;
+  return price > 0 ? price : 0;
+}
+
+/**
  * Validate and build a position from user input.
  *
  * Returns `{ ok: true, position }` or `{ ok: false, error }` — never throws,
  * because this is called straight from an IPC handler whose return value the
  * renderer prints.
  *
- * `qty` is derived, not entered: the user says "500 USDT at 10x", and the
- * contract size follows from that. Letting both be entered would allow a
- * position whose margin and notional disagree, and there is no honest way to
- * draw that.
+ * QUANTITY and MARGIN are both real, per-position fields, and they are not
+ * independent: `leverage` fixes the MINIMUM margin a given quantity requires
+ * (notional / leverage). The user may post more than that — that is what
+ * "adding margin" means on the exchange, and it is the only way to move a
+ * liquidation price without changing the size of the bet. Posting less is
+ * refused, because it would silently mean a higher leverage than the one the
+ * user typed.
  *
- * @param {object} input  {symbol, side, leverage, margin, entry, note}
+ * Backward compatibility: a row written before quantity existed has margin,
+ * leverage and entry but no qty. In that case qty is derived from them, which
+ * reproduces exactly the position that row described.
+ *
+ * @param {object} input  {symbol, side, marginMode, leverage, entry, qty, margin, note}
  * @param {string} symbol already normalised by the caller
  * @returns {{ok:boolean, position?:object, error?:string}}
  */
@@ -100,17 +206,46 @@ function buildPosition(input, symbol) {
   const entry = num(i.entry);
   if (!(entry > 0)) return { ok: false, error: 'Giá vào phải lớn hơn 0.' };
 
-  const margin = num(i.margin);
-  if (!(margin > 0)) return { ok: false, error: 'Ký quỹ phải lớn hơn 0.' };
-
   const leverage = Math.round(num(i.leverage, 1));
   if (!(leverage >= MIN_LEVERAGE && leverage <= MAX_LEVERAGE)) {
     return { ok: false, error: `Đòn bẩy phải từ ${MIN_LEVERAGE} đến ${MAX_LEVERAGE}.` };
   }
 
   const side = normalizeSide(i.side);
-  const notional = margin * leverage;
-  const qty = notional / entry;
+  const marginMode = normalizeMarginMode(i.marginMode);
+
+  /**
+   * Quantity: taken from the input when given, otherwise derived from the
+   * margin and leverage of an older row.
+   */
+  let qty = num(i.qty);
+  let margin = num(i.margin);
+
+  if (!(qty > 0)) {
+    if (!(margin > 0)) return { ok: false, error: 'Khối lượng phải lớn hơn 0.' };
+    qty = (margin * leverage) / entry;
+  }
+  if (!(qty > 0)) return { ok: false, error: 'Khối lượng phải lớn hơn 0.' };
+
+  const notional = qty * entry;
+  const requiredMargin = notional / leverage;
+
+  if (!(margin > 0)) margin = requiredMargin;
+
+  /**
+   * A margin below the requirement is not "a smaller position" — it is the
+   * same position at a higher leverage than the one on the label. Refused
+   * rather than silently rounded up, so the number the user sees is the number
+   * that is actually backing the bet.
+   */
+  if (margin < requiredMargin - 1e-9) {
+    return {
+      ok: false,
+      error: `Ký quỹ tối thiểu ${requiredMargin.toFixed(2)} USDT cho `
+        + `${qty} đơn vị ở ${leverage}x.`,
+    };
+  }
+
   const entryFee = notional * TAKER_FEE;
 
   return {
@@ -119,11 +254,16 @@ function buildPosition(input, symbol) {
       id: i.id || null,
       symbol: sym,
       side,
+      marginMode,
       leverage,
-      margin,
       entry,
       qty,
+      margin,
       notional,
+      requiredMargin,
+      // What the position is really running at once the posted margin is
+      // taken into account. Equal to `leverage` unless extra margin was added.
+      effectiveLeverage: notional / margin,
       entryFee,
       note: String(i.note || '').slice(0, 120),
       openedAt: num(i.openedAt) || Date.now(),
@@ -139,6 +279,10 @@ function buildPosition(input, symbol) {
  * gross PnL would overstate every position by ~0.1% of notional, which at 20x
  * is 2% of the margin — not a rounding error.
  *
+ * The liquidation price is filled in for ISOLATED positions here. A CROSS
+ * position's price depends on the whole pool, so it is left at 0 and filled in
+ * by `computeFutures` on its second pass.
+ *
  * @param {object} pos   a stored position
  * @param {number} mark  current price
  * @returns {object} the position plus its derived numbers
@@ -150,6 +294,7 @@ function markPosition(pos, mark) {
   const margin = num(p.margin);
   const lev = num(p.leverage, 1);
   const side = normalizeSide(p.side);
+  const marginMode = normalizeMarginMode(p.marginMode);
   const m = num(mark);
 
   const hasPrice = m > 0;
@@ -166,31 +311,21 @@ function markPosition(pos, mark) {
   const exitFee = hasPrice ? price * qty * TAKER_FEE : 0;
   const pnl = gross - num(p.entryFee) - exitFee;
   const roe = margin > EPS ? (pnl / margin) * 100 : 0;
-  const liq = liquidationPrice(entry, side, lev);
 
-  /**
-   * Distance to liquidation, as a percentage of the current price.
-   *
-   * Positive means "still alive, this far from dying". The sign has to be
-   * taken per side: a long's liquidation sits BELOW the price and a short's
-   * ABOVE it, so a plain `(liq - price) / price` reported a healthy long as
-   * -9.6% — reading as if it were already past its liquidation.
-   */
-  const liqDistancePct = hasPrice && liq > 0
-    ? ((side === 'LONG' ? price - liq : liq - price) / price) * 100
+  const liq = marginMode === 'isolated'
+    ? isolatedLiquidation(entry, side, qty, margin)
     : 0;
 
   /**
-   * A position is liquidated when the mark crosses the liquidation price.
-   * Reported, not acted on: this is a demo book, so nothing is force-closed.
-   * The UI shows it in red and the user closes it themselves.
+   * An isolated position's liquidation price, distance and flag are all
+   * properties of the row alone, so they are filled in here. A cross row's are
+   * not — they depend on the whole pool — so they are left at 0/false and
+   * filled in by `computeFutures` on its second pass.
    */
-  const liquidated = hasPrice && liq > 0
-    && (side === 'LONG' ? price <= liq : price >= liq);
-
-  return {
+  const out = {
     ...p,
     side,
+    marginMode,
     mark: price,
     hasPrice,
     gross,
@@ -198,15 +333,48 @@ function markPosition(pos, mark) {
     pnl,
     roe,
     liq,
-    liqDistancePct,
-    liquidated,
+    liqDistancePct: 0,
+    liquidated: false,
     // Value of the position if closed right now: margin plus what it made.
     equity: margin + pnl,
+    // Kept for a row written before `effectiveLeverage` existed.
+    effectiveLeverage: margin > EPS ? (qty * entry) / margin : lev,
   };
+
+  if (marginMode === 'isolated') {
+    out.liqDistancePct = liqDistance(out);
+    out.liquidated = hasPrice && liq > 0
+      && (side === 'LONG' ? price <= liq : price >= liq);
+  }
+
+  return out;
+}
+
+/**
+ * Distance to liquidation, as a percentage of the current price.
+ *
+ * Positive means "still alive, this far from dying". The sign has to be taken
+ * per side: a long's liquidation sits BELOW the price and a short's ABOVE it,
+ * so a plain `(liq - price) / price` reported a healthy long as -9.6% —
+ * reading as if it were already past its liquidation.
+ */
+function liqDistance(pos) {
+  const p = pos || {};
+  const price = num(p.mark);
+  const liq = num(p.liq);
+  if (!(price > 0) || !(liq > 0)) return 0;
+  const d = normalizeSide(p.side) === 'LONG' ? price - liq : liq - price;
+  return (d / price) * 100;
 }
 
 /**
  * Mark every open position and total the book.
+ *
+ * Two passes, because cross positions cannot be marked in one:
+ *
+ *   1. mark each row to the live price (PnL, fees, isolated liquidation);
+ *   2. for the cross rows, build the shared pool from pass 1 and give each of
+ *      them the liquidation price that pool implies.
  *
  * @param {Array} list    stored positions
  * @param {Object} prices {BTCUSDT: 65000}
@@ -216,6 +384,35 @@ function computeFutures(list, prices = {}) {
   const rows = Array.isArray(list) ? list : [];
   const positions = rows.map((p) => markPosition(p, prices[p.symbol]));
 
+  // ---- pass 2: the cross pool -------------------------------------------
+  const cross = positions.filter((p) => p.marginMode === 'cross');
+  if (cross.length) {
+    const equity = cross.reduce((s, p) => s + num(p.margin) + num(p.pnl), 0);
+    const maintenance = cross.reduce((s, p) => s + MMR * num(p.notional), 0);
+    const wiped = equity <= maintenance;
+
+    for (const p of cross) {
+      p.liq = crossLiquidation(p, equity, maintenance);
+      p.liqDistancePct = liqDistance(p);
+      /**
+       * In cross mode the whole account dies together, so every cross row is
+       * reported as liquidated at once. Reporting them one by one would let
+       * the UI show a "safe" row next to a dead one in the same pool.
+       */
+      p.liquidated = wiped || (p.liq > 0 && (p.side === 'LONG'
+        ? p.mark <= p.liq
+        : p.mark >= p.liq));
+    }
+  }
+
+  // ---- isolated rows: distance and the liquidation flag ------------------
+  for (const p of positions) {
+    if (p.marginMode === 'cross') continue;
+    p.liqDistancePct = liqDistance(p);
+    p.liquidated = p.hasPrice && p.liq > 0
+      && (p.side === 'LONG' ? p.mark <= p.liq : p.mark >= p.liq);
+  }
+
   const totals = {
     count: positions.length,
     margin: positions.reduce((s, p) => s + num(p.margin), 0),
@@ -223,6 +420,8 @@ function computeFutures(list, prices = {}) {
     pnl: positions.reduce((s, p) => s + num(p.pnl), 0),
     equity: positions.reduce((s, p) => s + num(p.equity), 0),
     atRisk: positions.filter((p) => p.liquidated).length,
+    crossCount: cross.length,
+    isolatedCount: positions.length - cross.length,
   };
   totals.roe = totals.margin > EPS ? (totals.pnl / totals.margin) * 100 : 0;
 
@@ -278,6 +477,7 @@ function stripRows(totals, pins) {
       text: n.liq.toFixed(n.liq < 1 ? 4 : 2),
       sub: `${n.liqDistancePct >= 0 ? '+' : ''}${n.liqDistancePct.toFixed(1)}%`,
       tone: n.liquidated ? 'down' : Math.abs(n.liqDistancePct) < 5 ? 'down' : 'flat',
+      mode: n.marginMode,
     });
   }
   return out;
@@ -288,8 +488,13 @@ module.exports = {
   TAKER_FEE,
   MIN_LEVERAGE,
   MAX_LEVERAGE,
+  MARGIN_MODES,
   normalizeSide,
+  normalizeMarginMode,
   liquidationPrice,
+  isolatedLiquidation,
+  crossLiquidation,
+  liqDistance,
   buildPosition,
   markPosition,
   computeFutures,

@@ -12,15 +12,15 @@
     "start": "electron .",
     "test": "node --test --test-timeout=15000 test/portfolio.test.js test/feed.test.js test/alerts.test.js test/store.test.js test/chart.test.js test/window-role.test.js test/dock-size.test.js test/display.test.js test/coin-icon.test.js test/text-color.test.js test/klines.test.js test/candles.test.js test/futures.test.js test/futures-store.test.js",
     "test:e2e": "xvfb-run -a node test/e2e.js",
-    "test:candles": "xvfb-run -a node test/candles.e2e.js",
-    "test:futures": "xvfb-run -a node test/shots-futures.js",
+    "test:candles": "xvfb-run -a node test/spark.e2e.js",
+    "test:futures": "xvfb-run -a node test/futures.e2e.js",
     "test:all": "npm test && npm run test:e2e && npm run test:candles && npm run test:futures",
     "predist": "node build/make-icons.js",
     "dist": "electron-builder --win --x64",
     "dist:portable": "electron-builder --win portable --x64"
   },
   "dependencies": {
-    "ws": "^8.18.0"
+    "ws": "^8.23.0"
   },
   "devDependencies": {
     "electron": "^41.0.0",

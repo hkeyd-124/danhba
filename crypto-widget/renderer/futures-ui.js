@@ -44,6 +44,15 @@
   };
 
   let sideValue = 'LONG';
+  let modeValue = 'isolated';
+
+  /** Mirrors MMR in src/futures.js — preview only, see the file header. */
+  const MMR = 0.004;
+
+  const MODE_HINT = {
+    isolated: 'Isolate: ký quỹ riêng, lệnh tự chết khi lỗ hết phần ký quỹ của nó.',
+    cross: 'Cross: mọi lệnh cross dùng chung một pool. Cháy là cháy cả tài khoản.',
+  };
 
   // ------------------------------------------------------------- panel list
   function renderPanel() {
@@ -77,23 +86,37 @@
       const distText = p.hasPrice && p.liq > 0
         ? `${p.liqDistancePct >= 0 ? '+' : ''}${p.liqDistancePct.toFixed(1)}%`
         : '—';
+      const isCross = p.marginMode === 'cross';
+      /**
+       * Effective leverage is shown only when it differs from the label.
+       *
+       * With extra margin posted, "10x" is no longer what the position is
+       * running at, and showing the label alone would overstate the risk.
+       */
+      const effLev = Number(p.effectiveLeverage);
+      const levText = Number.isFinite(effLev) && Math.abs(effLev - p.leverage) > 0.05
+        ? `${p.leverage}x → ${effLev.toFixed(1)}x`
+        : `${p.leverage}x`;
       return `
       <div class="fut" data-fid="${esc(p.id)}">
         <div class="fut-top">
           ${badgeHtml(p.symbol, 'sm')}
           <span class="fut-sym">${esc(baseOf(p.symbol))}</span>
           <span class="side ${sideCls}">${p.side === 'LONG' ? 'LONG' : 'SHORT'}</span>
-          <span class="fut-lev">${p.leverage}x</span>
+          <span class="fut-mode ${isCross ? 'is-cross' : ''}">${isCross ? 'CROSS' : 'ISOLATE'}</span>
+          <span class="fut-lev">${levText}</span>
           <span class="fut-pnl ${pnlCls}">${fmtSigned(p.pnl)} (${fmtPct(p.roe)})</span>
         </div>
         <div class="fut-sub">
           <span>Vào ${fmtPrice(p.entry)}</span>
           <span>Mark ${p.hasPrice ? fmtPrice(p.mark) : '—'}</span>
+          <span>KL ${fmtQty(p.qty)}</span>
           <span>Ký quỹ ${fmtMoney(p.margin)}</span>
         </div>
         <div class="fut-liq ${liqCls}">
           ${p.liquidated ? '⚠ Đã chạm giá thanh lý' : 'Thanh lý'} ${liqText}
           <span class="fut-dist">cách ${distText}</span>
+          ${isCross ? '<span class="fut-dist">· theo pool cross</span>' : ''}
         </div>
         <div class="fut-actions">
           <button class="linkbtn" data-fdel="${esc(p.id)}">Đóng lệnh</button>
@@ -140,28 +163,85 @@
   /**
    * The live preview inside the open-position sheet.
    *
-   * Mirrors `buildPosition` + `liquidationPrice` from src/futures.js. This is a
-   * deliberate second copy of the FORMULA and the only one in the renderer —
-   * see the file header for why it is acceptable here and nowhere else.
+   * Mirrors `buildPosition` + `isolatedLiquidation` / `crossLiquidation` from
+   * src/futures.js. This is a deliberate second copy of the FORMULA and the
+   * only one in the renderer — see the file header for why it is acceptable
+   * here and nowhere else.
+   *
+   * For CROSS the preview has to guess at the pool, because the position does
+   * not exist yet. It uses the cross rows already in the book, which is the
+   * honest answer to "if I add this now, where does the account die".
    */
   function updateCalc() {
     const el = $('futureCalc');
-    const margin = parseFloat($('futureMargin').value);
+    const qty = parseFloat($('futureQty').value);
     const lev = parseFloat($('futureLeverage').value);
     const entry = parseFloat($('futureEntry').value);
-    if (!Number.isFinite(margin) || !Number.isFinite(lev) || margin <= 0 || lev < 1) {
-      el.textContent = 'Nhập ký quỹ và đòn bẩy để xem khối lượng và giá thanh lý.';
+    const marginIn = parseFloat($('futureMargin').value);
+
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(lev) || lev < 1) {
+      el.textContent = 'Nhập khối lượng và đòn bẩy để xem ký quỹ tối thiểu và giá thanh lý.';
+      $('futureMarginHint').textContent = 'Tối thiểu theo khối lượng và đòn bẩy.';
       return;
     }
-    const notional = margin * lev;
-    const move = 1 / lev - 0.004;
-    const liq = Number.isFinite(entry) && entry > 0
-      ? (sideValue === 'LONG' ? entry * (1 - move) : entry * (1 + move))
-      : 0;
-    const qty = Number.isFinite(entry) && entry > 0 ? notional / entry : 0;
-    el.textContent = `Khối lượng ${fmtMoney(notional)} USDT · ${lev}x`
-      + (qty > 0 ? ` · ${fmtQty(qty)} đơn vị` : '')
+
+    const notional = qty * (Number.isFinite(entry) && entry > 0 ? entry : 0);
+    const required = notional > 0 ? notional / lev : 0;
+    const margin = Number.isFinite(marginIn) && marginIn > 0 ? marginIn : required;
+
+    $('futureMarginHint').textContent = required > 0
+      ? `Tối thiểu ${fmtMoney(required)} USDT. Thêm vào đây để đẩy giá thanh lý ra xa.`
+      : 'Tối thiểu theo khối lượng và đòn bẩy.';
+
+    if (!(notional > 0)) {
+      el.textContent = `Ký quỹ tối thiểu ${fmtMoney(required)} USDT · nhập giá vào để xem giá thanh lý.`;
+      return;
+    }
+
+    if (margin < required - 1e-9) {
+      el.textContent = `Ký quỹ thấp hơn mức tối thiểu ${fmtMoney(required)} USDT cho `
+        + `${fmtQty(qty)} đơn vị ở ${lev}x.`;
+      return;
+    }
+
+    let liq = 0;
+    if (modeValue === 'isolated') {
+      const buffer = margin - MMR * notional;
+      if (buffer > 0) {
+        liq = sideValue === 'LONG' ? entry - buffer / qty : entry + buffer / qty;
+      }
+    } else {
+      /**
+       * Cross: pool = the cross rows already open, plus this one.
+       *
+       * The new position is assumed to open at its entry, so it contributes
+       * margin and no PnL yet.
+       */
+      let equity = margin;
+      let maintenance = MMR * notional;
+      for (const p of fut.positions) {
+        if (p.marginMode !== 'cross') continue;
+        equity += Number(p.margin) + Number(p.pnl);
+        maintenance += MMR * Number(p.notional);
+      }
+      const delta = (equity - maintenance) / qty;
+      liq = sideValue === 'LONG' ? entry - delta : entry + delta;
+    }
+
+    const effLev = notional / margin;
+    el.textContent = `Khối lượng ${fmtQty(qty)} · ${fmtMoney(notional)} USDT · ${lev}x`
+      + (Math.abs(effLev - lev) > 0.05 ? ` (thực tế ${effLev.toFixed(1)}x)` : '')
+      + ` · ký quỹ ${fmtMoney(margin)}`
       + (liq > 0 ? ` · thanh lý ~${fmtPrice(liq)}` : '');
+  }
+
+  function setMode(mode) {
+    modeValue = mode === 'cross' ? 'cross' : 'isolated';
+    $('futureMode').querySelectorAll('.seg-btn').forEach((b) => {
+      b.classList.toggle('is-active', b.dataset.mode === modeValue);
+    });
+    $('futureModeHint').textContent = MODE_HINT[modeValue];
+    updateCalc();
   }
 
   function openSheet(pos) {
@@ -169,15 +249,16 @@
     $('futureId').value = pos ? pos.id : '';
     $('futureTitle').textContent = pos ? 'Sửa lệnh future demo' : 'Mở lệnh future demo';
     $('futureSymbol').value = pos ? baseOf(pos.symbol) : '';
-    $('futureMargin').value = pos ? pos.margin : '';
+    $('futureQty').value = pos ? pos.qty : '';
     $('futureLeverage').value = pos ? pos.leverage : 10;
+    $('futureMargin').value = pos ? pos.margin : '';
     $('futureEntry').value = pos ? pos.entry : '';
     $('futureNote').value = pos ? (pos.note || '') : '';
     sideValue = pos ? pos.side : 'LONG';
     $('futureSide').querySelectorAll('.seg-btn').forEach((b) => {
       b.classList.toggle('is-active', b.dataset.side === sideValue);
     });
-    updateCalc();
+    setMode(pos ? pos.marginMode : 'isolated');
     openModal('futureModal');
     setTimeout(() => $('futureSymbol').focus(), 60);
   }
@@ -192,7 +273,13 @@
     updateCalc();
   });
 
-  ['futureMargin', 'futureLeverage', 'futureEntry']
+  $('futureMode').addEventListener('click', (e) => {
+    const b = e.target.closest('.seg-btn');
+    if (!b) return;
+    setMode(b.dataset.mode);
+  });
+
+  ['futureQty', 'futureLeverage', 'futureMargin', 'futureEntry']
     .forEach((id) => $(id).addEventListener('input', updateCalc));
 
   $('futureForm').addEventListener('submit', async (e) => {
@@ -204,8 +291,10 @@
       id: $('futureId').value || null,
       symbol: $('futureSymbol').value,
       side: sideValue,
-      margin: parseFloat($('futureMargin').value),
+      marginMode: modeValue,
+      qty: parseFloat($('futureQty').value),
       leverage: parseFloat($('futureLeverage').value),
+      margin: parseFloat($('futureMargin').value),
       entry: parseFloat($('futureEntry').value),
       note: $('futureNote').value,
     });

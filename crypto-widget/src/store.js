@@ -13,7 +13,7 @@ const { DEFAULT_INTERVAL, normalizeInterval } = require('./klines');
 const { buildPosition } = require('./futures');
 const { normalizeSymbol } = require('./portfolio');
 
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 
 /**
  * How many value samples the chart keeps.
@@ -208,6 +208,14 @@ class Store {
      * changed the fee) must not be able to leave a row whose numbers disagree
      * with each other. A row that no longer validates is dropped, not repaired
      * into something the user never entered.
+     *
+     * v8 -> v9: quantity and margin mode became real per-position fields.
+     *
+     * A v8 row has margin, leverage and entry but no `qty` and no
+     * `marginMode`. `buildPosition` derives qty from the other three, which
+     * reproduces exactly the position that row described, and defaults the
+     * mode to 'isolated' — the mode whose liquidation price the v8 build was
+     * already showing. So an upgrade changes no number on screen.
      */
     const futures = (Array.isArray(parsed.futures) ? parsed.futures : [])
       .filter((f) => f && typeof f === 'object')

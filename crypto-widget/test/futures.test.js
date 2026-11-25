@@ -59,12 +59,164 @@ test('build: qty follows from margin x leverage, not from the user', () => {
 });
 
 test('build: rejects each bad field with its own message', () => {
-  const base = { side: 'LONG', leverage: 10, margin: 500, entry: 100 };
+  const base = { side: 'LONG', leverage: 10, margin: 500, entry: 100, qty: 50 };
   assert.match(F.buildPosition({ ...base, entry: 0 }, 'BTCUSDT').error, /Giá vào/);
-  assert.match(F.buildPosition({ ...base, margin: 0 }, 'BTCUSDT').error, /Ký quỹ/);
+  assert.match(F.buildPosition({ ...base, qty: 0, margin: 0 }, 'BTCUSDT').error, /Khối lượng/);
   assert.match(F.buildPosition({ ...base, leverage: 0 }, 'BTCUSDT').error, /Đòn bẩy/);
   assert.match(F.buildPosition({ ...base, leverage: 200 }, 'BTCUSDT').error, /Đòn bẩy/);
   assert.match(F.buildPosition(base, '').error, /đồng coin/);
+});
+
+test('build: a margin below the requirement is refused, not rounded up', () => {
+  // 50 units at 100 = 5000 notional; at 10x that needs 500 USDT.
+  const r = F.buildPosition(
+    { side: 'LONG', leverage: 10, margin: 100, entry: 100, qty: 50 }, 'BTCUSDT',
+  );
+  assert.strictEqual(r.ok, false);
+  assert.match(r.error, /Ký quỹ tối thiểu 500\.00/);
+});
+
+test('build: extra margin is allowed and lowers the effective leverage', () => {
+  const r = F.buildPosition(
+    { side: 'LONG', leverage: 10, margin: 1000, entry: 100, qty: 50 }, 'BTCUSDT',
+  );
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.position.requiredMargin, 500);
+  assert.strictEqual(r.position.margin, 1000);
+  assert.strictEqual(r.position.effectiveLeverage, 5);
+});
+
+test('build: an omitted margin defaults to the requirement', () => {
+  const r = F.buildPosition(
+    { side: 'LONG', leverage: 10, entry: 100, qty: 50 }, 'BTCUSDT',
+  );
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.position.margin, 500);
+  assert.strictEqual(r.position.effectiveLeverage, 10);
+});
+
+test('build: a v8 row with no qty derives it from margin and leverage', () => {
+  // Exactly what a row written before quantity existed looks like.
+  const r = F.buildPosition(
+    { side: 'LONG', leverage: 10, margin: 100, entry: 100 }, 'BTCUSDT',
+  );
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.position.qty, 10);
+  assert.strictEqual(r.position.marginMode, 'isolated');
+});
+
+test('margin mode: anything that is not cross is isolated', () => {
+  assert.strictEqual(F.normalizeMarginMode('cross'), 'cross');
+  assert.strictEqual(F.normalizeMarginMode('CROSS'), 'cross');
+  assert.strictEqual(F.normalizeMarginMode('isolated'), 'isolated');
+  assert.strictEqual(F.normalizeMarginMode(undefined), 'isolated');
+  assert.strictEqual(F.normalizeMarginMode('nonsense'), 'isolated');
+});
+
+test('isolated liquidation: extra margin pushes the price further away', () => {
+  const bare = F.isolatedLiquidation(100, 'LONG', 10, 100);
+  const extra = F.isolatedLiquidation(100, 'LONG', 10, 200);
+  // 10 units at 100 = 1000 notional, MMR 0.004 -> 4 USDT maintenance.
+  // bare:  (100 - 4) / 10 = 9.6 below -> 90.4
+  // extra: (200 - 4) / 10 = 19.6 below -> 80.4
+  assert.ok(Math.abs(bare - 90.4) < 1e-9, `bare ${bare}`);
+  assert.ok(Math.abs(extra - 80.4) < 1e-9, `extra ${extra}`);
+  assert.ok(extra < bare, 'more margin must liquidate later for a long');
+});
+
+test('isolated liquidation: agrees with the leverage-only formula at the requirement', () => {
+  for (const lev of [1, 3, 10, 25, 50, 125]) {
+    const qty = 1;
+    const entry = 100;
+    const required = (qty * entry) / lev;
+    const a = F.liquidationPrice(entry, 'LONG', lev);
+    const b = F.isolatedLiquidation(entry, 'LONG', qty, required);
+    assert.ok(Math.abs(a - b) < 1e-9, `${lev}x: ${a} vs ${b}`);
+  }
+});
+
+test('cross liquidation: a lone cross position dies at the same place as isolated', () => {
+  const p = F.buildPosition(
+    { side: 'LONG', leverage: 10, margin: 100, entry: 100, qty: 10, marginMode: 'cross' },
+    'BTCUSDT',
+  ).position;
+  const { positions } = F.computeFutures([p], { BTCUSDT: 100 });
+  const isolated = F.isolatedLiquidation(100, 'LONG', 10, 100);
+  /**
+   * Not exactly equal, and the gap is real: the cross pool's equity is
+   * margin + PnL, and PnL has BOTH fees taken out of it (entry and the
+   * hypothetical exit). The isolated formula works from the posted margin and
+   * ignores fees entirely. So cross liquidates a hair EARLIER — 0.1 USDT here,
+   * which is the 1.0 USDT of fees divided by 10 units. Asserting exact
+   * equality would be asserting that fees do not exist.
+   */
+  const feeEffect = 1.0 / 10;
+  assert.ok(Math.abs(positions[0].liq - (isolated + feeEffect)) < 1e-6,
+    `cross ${positions[0].liq} vs isolated ${isolated} + fee ${feeEffect}`);
+  assert.ok(positions[0].liq > isolated, 'cross must not be safer than isolated');
+});
+
+test('cross liquidation: a second position in the pool moves the first one', () => {
+  const a = F.buildPosition(
+    { side: 'LONG', leverage: 10, margin: 100, entry: 100, qty: 10, marginMode: 'cross' },
+    'BTCUSDT',
+  ).position;
+  const b = F.buildPosition(
+    { side: 'LONG', leverage: 10, margin: 100, entry: 100, qty: 10, marginMode: 'cross' },
+    'ETHUSDT',
+  ).position;
+
+  const alone = F.computeFutures([a], { BTCUSDT: 100 }).positions[0].liq;
+  const together = F.computeFutures([a, b], { BTCUSDT: 100, ETHUSDT: 100 }).positions[0].liq;
+
+  // Two identical positions share one pool, so the account survives a move
+  // roughly twice as large: the liquidation price sits further from the mark.
+  assert.ok(together < alone, `together ${together} should be below alone ${alone}`);
+});
+
+test('cross liquidation: an isolated position is unaffected by the cross pool', () => {
+  const iso = F.buildPosition(
+    { side: 'LONG', leverage: 10, margin: 100, entry: 100, qty: 10 },
+    'BTCUSDT',
+  ).position;
+  const cross = F.buildPosition(
+    { side: 'LONG', leverage: 10, margin: 100, entry: 100, qty: 10, marginMode: 'cross' },
+    'ETHUSDT',
+  ).position;
+
+  const alone = F.computeFutures([iso], { BTCUSDT: 100 }).positions[0].liq;
+  const withCross = F.computeFutures([iso, cross], { BTCUSDT: 100, ETHUSDT: 100 })
+    .positions[0].liq;
+  assert.strictEqual(alone, withCross);
+});
+
+test('cross liquidation: the whole pool is reported liquidated together', () => {
+  const a = F.buildPosition(
+    { side: 'LONG', leverage: 50, margin: 100, entry: 100, qty: 50, marginMode: 'cross' },
+    'BTCUSDT',
+  ).position;
+  const b = F.buildPosition(
+    { side: 'LONG', leverage: 50, margin: 100, entry: 100, qty: 50, marginMode: 'cross' },
+    'ETHUSDT',
+  ).position;
+  // 50x: 5000 notional each, 100 margin each. A 2% drop loses 100 on each.
+  const { positions, totals } = F.computeFutures([a, b], { BTCUSDT: 97, ETHUSDT: 97 });
+  assert.strictEqual(positions[0].liquidated, true);
+  assert.strictEqual(positions[1].liquidated, true);
+  assert.strictEqual(totals.atRisk, 2);
+});
+
+test('compute: totals count the two margin modes separately', () => {
+  const iso = F.buildPosition(
+    { side: 'LONG', leverage: 10, margin: 100, entry: 100, qty: 10 }, 'BTCUSDT',
+  ).position;
+  const cross = F.buildPosition(
+    { side: 'LONG', leverage: 10, margin: 100, entry: 100, qty: 10, marginMode: 'cross' },
+    'ETHUSDT',
+  ).position;
+  const { totals } = F.computeFutures([iso, cross], { BTCUSDT: 100, ETHUSDT: 100 });
+  assert.strictEqual(totals.crossCount, 1);
+  assert.strictEqual(totals.isolatedCount, 1);
 });
 
 test('build: leverage is rounded, so 10.4 and 10 behave the same', () => {

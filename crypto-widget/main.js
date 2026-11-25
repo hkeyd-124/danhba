@@ -46,6 +46,7 @@ const display = require('./src/display');
 const { badgeFor, glyphColor } = require('./src/coin-icon');
 const textColor = require('./src/text-color');
 const { KlineCache } = require('./src/klines');
+const futures = require('./src/futures');
 
 const IS_TEST = process.env.CPW_TEST === '1';
 const EXPANDED = { width: 420, height: 660 };
@@ -397,12 +398,23 @@ function placementBounds() {
  * instead, because there it is an overlay inside that rectangle.
  */
 function stripHeight() {
-  const rows = display.stripCoinRows(
-    computePositions(store.trades, prices).positions,
-    store.settings.stripCoins,
-  ).length;
+  const positions = computePositions(store.trades, prices).positions;
+  const rows = display.stripCoinRows(positions, store.settings.stripCoins).length;
+  /**
+   * Futures rows count toward the strip's height.
+   *
+   * They are drawn in the same column as the coin rows, so a strip sized for
+   * the coins alone would clip them. The count comes from the same
+   * `stripRows` call the renderer paints, so the box and its contents cannot
+   * disagree.
+   */
+  const fut = futures.computeFutures(store.futures, prices);
+  const futRows = futures.stripRows(fut.totals, {
+    pnl: store.settings.futPinPnl,
+    liq: store.settings.futPinLiq,
+  }).length;
   const { workArea: a } = screen.getPrimaryDisplay();
-  return display.stripHeightFor(rows, a.height);
+  return display.stripHeightFor(rows + futRows, a.height);
 }
 
 function send(channel, payload) {
@@ -439,6 +451,20 @@ function pushState() {
   const stripRows = display.stripCoinRows(positions, store.settings.stripCoins);
 
   /**
+   * Demo futures, marked to the same prices as the spot book.
+   *
+   * Computed here for the same reason the badges are: the renderer is
+   * sandboxed and cannot `require` src/futures.js, and the liquidation price is
+   * a number the user acts on — it must come from one function, not from a
+   * second copy in the renderer that could drift.
+   */
+  const fut = futures.computeFutures(store.futures, prices);
+  const futRows = futures.stripRows(fut.totals, {
+    pnl: store.settings.futPinPnl,
+    liq: store.settings.futPinLiq,
+  });
+
+  /**
    * The derived text tones travel with the state.
    *
    * They depend on the text colour AND the theme, and the theme can change
@@ -469,6 +495,9 @@ function pushState() {
     badges,
     tones,
     history: store.history,
+    futures: fut.positions,
+    futuresTotals: fut.totals,
+    futuresRows: futRows,
     klines: klines ? klines.snapshot() : {},
     feedStatus: feed ? feed.status : 'idle',
     collapsed,
@@ -479,6 +508,17 @@ function pushState() {
 
 function refreshSymbols() {
   const syms = symbolsInUse(store.trades);
+  /**
+   * Futures symbols are priced too.
+   *
+   * A demo position on a coin the spot portfolio does not hold would otherwise
+   * have no mark price at all, and its PnL would sit at zero forever. Merged
+   * into the same list rather than a second feed: one subscription, one
+   * outbound connection, which is the security promise this app makes.
+   */
+  for (const f of store.futures) {
+    if (f && f.symbol && !syms.includes(f.symbol)) syms.push(f.symbol);
+  }
   if (feed) feed.setSymbols(syms);
   engine.setAlerts(store.alerts);
   // Candles follow the same symbol list as the price feed: one definition of
@@ -1127,6 +1167,58 @@ function registerIpc() {
     return { ok: true };
   });
 
+  /**
+   * Open a demo futures position.
+   *
+   * Nothing leaves the machine: no order, no API key, no account. The row is
+   * written to the same local JSON file as the trades, and every number on it
+   * is derived from the live mark price the feed already fetches.
+   *
+   * `qty` is NOT taken from the input — `buildPosition` derives it from margin
+   * and leverage, so a position can never claim a size its margin cannot back.
+   */
+  ipcMain.handle('save-future', (_e, input) => {
+    const f = input || {};
+    const symbol = normalizeSymbol(f.symbol);
+    const built = futures.buildPosition(f, symbol);
+    if (!built.ok) return { ok: false, error: built.error };
+
+    const pos = {
+      ...built.position,
+      id: typeof f.id === 'string' && f.id ? f.id : crypto.randomUUID(),
+    };
+    store.upsertFuture(pos);
+    // A new symbol may need a price it was not subscribed to yet.
+    refreshSymbols();
+    pushState();
+    return { ok: true, position: pos };
+  });
+
+  ipcMain.handle('delete-future', (_e, id) => {
+    const ok = store.deleteFuture(id);
+    refreshSymbols();
+    pushState();
+    return { ok };
+  });
+
+  /**
+   * Pin switches for the strip.
+   *
+   * Separate from `patch-settings` because they change the strip's HEIGHT, and
+   * a docked strip has to be re-placed immediately or the new row is drawn into
+   * a box that is still the old size and gets clipped.
+   */
+  ipcMain.handle('pin-futures', (_e, pins) => {
+    const p = pins || {};
+    const patch = {};
+    if (typeof p.pnl === 'boolean') patch.futPinPnl = p.pnl;
+    if (typeof p.liq === 'boolean') patch.futPinLiq = p.liq;
+    store.patchSettings(patch);
+    if (isDocked() && collapsed) applyDockBounds();
+    pushState();
+    return { ok: true, settings: store.settings };
+  });
+
   ipcMain.handle('patch-settings', (_e, patch) => {
     const p = patch || {};
     const allowed = {};
@@ -1390,7 +1482,29 @@ app.whenReady().then(() => {
   feed.on('price', ({ symbol, price }) => {
     prices[symbol] = price;
     engine.onPrice(symbol, price);
-    send('prices', { symbol, price, prices });
+    /**
+     * The futures book is re-marked on every tick, not only on `pushState`.
+     *
+     * A demo position's whole point is watching its PnL and its distance to
+     * liquidation move. Sending only the spot prices would leave both frozen
+     * between state pushes — which happen on a user action, not on a tick — so
+     * the numbers would be stale exactly when they matter most.
+     *
+     * Marked here, in the main process, so the liquidation formula still has
+     * exactly one implementation.
+     */
+    const fut = futures.computeFutures(store.futures, prices);
+    send('prices', {
+      symbol,
+      price,
+      prices,
+      futures: fut.positions,
+      futuresTotals: fut.totals,
+      futuresRows: futures.stripRows(fut.totals, {
+        pnl: store.settings.futPinPnl,
+        liq: store.settings.futPinLiq,
+      }),
+    });
   });
   feed.on('status', (s) => send('feed-status', s));
   feed.on('error', (err) => {

@@ -10,8 +10,10 @@ const {
   DEFAULT_DISPLAY, normalizeDisplay, normalizeStripCoins,
 } = require('./display');
 const { DEFAULT_INTERVAL, normalizeInterval } = require('./klines');
+const { buildPosition } = require('./futures');
+const { normalizeSymbol } = require('./portfolio');
 
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 /**
  * How many value samples the chart keeps.
@@ -29,6 +31,9 @@ function emptyState() {
     version: SCHEMA_VERSION,
     trades: [],
     alerts: [],
+    // Demo futures positions. Local only, like everything else: no exchange
+    // account, no API key, no order. See src/futures.js.
+    futures: [],
     // Portfolio value over time, for the chart. Local only, like everything else.
     history: [],
     settings: {
@@ -90,6 +95,12 @@ function emptyState() {
       // exactly what every earlier version drew — so an upgrade changes nothing
       // until the user ticks a coin.
       stripCoins: [],
+      // ---- demo futures ----
+      // Which of the two futures rows the collapsed strip pins. Independent
+      // switches: the PnL row answers "am I up", the liquidation row answers
+      // "am I about to be wiped out", and a user may want either alone.
+      futPinPnl: true,
+      futPinLiq: true,
     },
   };
 }
@@ -184,6 +195,32 @@ class Store {
      */
     settings.candleInterval = normalizeInterval(settings.candleInterval);
 
+    /**
+     * v7 -> v8: demo futures positions.
+     *
+     * A file written before this has no `futures` and no pin switches. Both
+     * default to "nothing there" / "both pins on", so an existing install
+     * looks and behaves exactly as before until the user opens a position.
+     *
+     * Each stored row is re-derived through `buildPosition` rather than trusted
+     * as-is: `qty`, `notional` and `entryFee` are all functions of margin,
+     * leverage and entry, and a hand-edited file (or a future build that
+     * changed the fee) must not be able to leave a row whose numbers disagree
+     * with each other. A row that no longer validates is dropped, not repaired
+     * into something the user never entered.
+     */
+    const futures = (Array.isArray(parsed.futures) ? parsed.futures : [])
+      .filter((f) => f && typeof f === 'object')
+      .map((f) => {
+        const built = buildPosition(f, normalizeSymbol(f.symbol));
+        if (!built.ok) return null;
+        return { ...built.position, id: typeof f.id === 'string' && f.id ? f.id : null };
+      })
+      .filter((f) => f && f.id);
+
+    settings.futPinPnl = settings.futPinPnl !== false;
+    settings.futPinLiq = settings.futPinLiq !== false;
+
     const history = Array.isArray(parsed.history)
       ? parsed.history
         // `v > 0` as well as finite: `pushHistory` refuses a non-positive
@@ -222,6 +259,7 @@ class Store {
       version: SCHEMA_VERSION,
       trades: Array.isArray(parsed.trades) ? parsed.trades : [],
       alerts,
+      futures,
       history,
       settings,
     };
@@ -254,6 +292,7 @@ class Store {
 
   get trades() { return this.state.trades; }
   get alerts() { return this.state.alerts; }
+  get futures() { return this.state.futures; }
   get settings() { return this.state.settings; }
   get history() { return this.state.history; }
 
@@ -307,6 +346,21 @@ class Store {
     this.state.alerts = this.state.alerts.filter((a) => a.id !== id);
     this.saveDebounced();
     return before !== this.state.alerts.length;
+  }
+
+  upsertFuture(pos) {
+    const idx = this.state.futures.findIndex((f) => f.id === pos.id);
+    if (idx >= 0) this.state.futures[idx] = { ...this.state.futures[idx], ...pos };
+    else this.state.futures.push(pos);
+    this.saveDebounced();
+    return pos;
+  }
+
+  deleteFuture(id) {
+    const before = this.state.futures.length;
+    this.state.futures = this.state.futures.filter((f) => f.id !== id);
+    this.saveDebounced();
+    return before !== this.state.futures.length;
   }
 
   patchSettings(patch) {

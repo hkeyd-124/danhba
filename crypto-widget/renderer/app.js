@@ -56,6 +56,28 @@ function fmtPct(n) {
   const s = v > 0 ? '+' : v < 0 ? '−' : '';
   return `${s}${Math.abs(v).toFixed(2)}%`;
 }
+/**
+ * A PnL figure squeezed into a 13px strip row.
+ *
+ * `fmtSigned` is right for the panel, where the row has a whole line for it.
+ * In the strip the same number competes with the ticker, the chart, the price
+ * and the ROI inside ~300px, and "−1,234.56" alone would take a fifth of
+ * it. Thousands collapse to "k" so the column keeps a stable width and the
+ * price does not jump sideways when a position crosses 1,000.
+ */
+function fmtCompact(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '—';
+  const a = Math.abs(v);
+  const s = v > 0 ? '+' : v < 0 ? '−' : '';
+  if (a >= 1000) return `${s}${(a / 1000).toFixed(a >= 10000 ? 0 : 1)}k`;
+  // Exactly zero is a real state (a position that has not moved), and "0.000"
+  // reads like a rounding artefact. Two decimals, no sign.
+  if (a === 0) return '0.00';
+  if (a >= 1) return `${s}${a.toFixed(2)}`;
+  return `${s}${a.toFixed(3)}`;
+}
+
 function cls(n) {
   const v = Number(n);
   if (!Number.isFinite(v) || Math.abs(v) < 1e-9) return 'flat';
@@ -402,11 +424,25 @@ function renderStripCoins() {
      * series has not arrived, so the price keeps its right edge either way.
      */
     const spark = shows('stripSpark') ? candleHtml(p.symbol, { cls: 'cd-strip', max: CANDLE_MAX_STRIP }) : '';
+    /**
+     * The row reads left to right as
+     *   icon · ticker · chart · PnL · market price · ROI
+     *
+     * The PnL is the position's own profit in USDT, not the coin's 24h move:
+     * the ROI at the end is the percentage of the same position, so the two
+     * numbers beside each other answer "how much, and how much of what I put
+     * in". The market price sits between them because it is the input both are
+     * derived from.
+     *
+     * `fmtCompact` rather than `fmtSigned`: see its note — a full
+     * "−1,234.56" would push the price off a 300px strip.
+     */
     return `
       <div class="cv-coin" data-symbol="${esc(p.symbol)}">
         ${badgeHtml(p.symbol, 'sm')}
         <span class="cv-coin-sym">${esc(p.base)}</span>
         ${spark}
+        <span class="cv-coin-pnl ${pnlCls}">${fmtCompact(p.unrealized)}</span>
         <span class="cv-coin-price">${price}</span>
         <span class="cv-coin-pct ${pnlCls}">${fmtPct(p.pnlPct)}</span>
       </div>`;
@@ -448,17 +484,17 @@ function renderPositions() {
     const pnlCls = cls(p.unrealized);
     const priceNote = p.hasPrice ? '' : ' <span class="warn warn-inline">chưa có giá</span>';
     /**
-     * The ticker appears exactly once.
+     * The ticker is ALWAYS written, badge or no badge.
      *
-     * The badge already carries it, so drawing the symbol again next to the
-     * badge said "BTC BTC" — which is what the first version did, and it read
-     * as a rendering mistake. The badge is the label when icons are on; the
-     * text label is the fallback when they are off, so the row is never
-     * nameless.
+     * The first version drew the badge alone when icons were on, on the theory
+     * that the badge "already carries" the ticker. It does not: the badge is an
+     * `<img alt="">` — a logo, not a label — so with icons enabled the detail
+     * row had no coin name anywhere, and the only way to tell ETH from ETC was
+     * to recognise the artwork. The old text badge did carry the letters, which
+     * is why "BTC BTC" looked like a mistake back then; a real icon next to a
+     * ticker is just a logo next to its name.
      */
-    const name = withIcons
-      ? badgeHtml(p.symbol)
-      : `<span class="pos-sym" data-fg="${esc(c)}">${esc(p.base)}</span>`;
+    const name = `${withIcons ? badgeHtml(p.symbol) : ''}<span class="pos-sym" data-fg="${esc(c)}">${esc(p.base)}</span>`;
     /**
      * The candlestick chart goes in the row's own middle: after the name, before the
      * value. `.pos-top` is a flex row, so the SVG takes the leftover width and
@@ -970,7 +1006,7 @@ function syncDisplayChecks() {
   $('emptyNotice').hidden = anyPanel || (state.settings && state.settings.chart !== false);
   $('displayPanelHint').textContent = anyPanel
     ? 'Bỏ tích để ẩn. Ít nhất một mục nên được bật, nếu không bảng sẽ trống.'
-    : 'Đang tắt hết — bảng chỉ tiết sẽ trống. Tích lại ít nhất một mục.';
+    : 'Đang tắt hết — bảng chi tiết sẽ trống. Tích lại ít nhất một mục.';
 
   const anyStrip = ['stripTotal', 'stripPnl', 'stripPct'].some((k) => shows(k));
   $('displayStripHint').textContent = anyStrip

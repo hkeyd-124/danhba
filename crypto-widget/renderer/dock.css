@@ -1,1 +1,456 @@
-PLACEHOLDER_DOCK
+/**
+ * Taskbar dock mode.
+ *
+ * Loaded after styles.css. Kept in its own file because it is a self-contained
+ * placement mode: the widget is moved and resized by the main process, and
+ * everything here only re-lays-out the summary for a 44px-tall window.
+ */
+
+/*
+ * Hover sensor fix.
+ *
+ * A `-webkit-app-region: drag` element swallows mouse events, so the bar
+ * cannot detect the pointer itself. The sensor strip used to be a real element
+ * that took the pointer — which also meant it swallowed CLICKS. Harmless in a
+ * 660px window, fatal in a 44px strip: the 20px sensor covered the top half of
+ * the summary and clicking there did nothing. It is now purely decorative and
+ * hover is detected from a document-level mousemove in app.js.
+ */
+.tb-zone { pointer-events: none; }
+
+/* the summary is a button in dock mode, so it must look and behave like one */
+.collapsed-view { cursor: pointer; }
+.collapsed-view:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* ================================================================ docked strip */
+/**
+ * The strip is deliberately compact — a 44px-tall window has no room for the
+ * 20px value plus 14px padding, so the summary is re-laid out horizontally.
+ *
+ * A visual check caught the first version truncating the total to "58,60…":
+ * the label and the P&L were taking the width, and the ONE thing this strip
+ * exists to show is the total. So the label is dropped entirely (the user
+ * asked for the total only), the value gets the flexible width and is never
+ * ellipsised, and the P&L is capped so it can never squeeze the number out.
+ */
+.widget.is-docked {
+  border-radius: 8px;
+}
+.widget.is-docked .collapsed-view {
+  padding: 0 10px;
+  gap: 6px;
+  align-items: center;
+}
+.widget.is-docked .cv-left {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* the label is redundant in a 44px strip: the number IS the widget */
+.widget.is-docked .cv-label { display: none; }
+.widget.is-docked .cv-value {
+  font-size: 15px;
+  margin-top: 0;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  letter-spacing: -.2px;
+}
+.widget.is-docked .cv-right {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  flex: 0 0 auto;
+  max-width: 46%;
+  transition: opacity .12s ease;
+}
+.widget.is-docked .cv-pnl {
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.widget.is-docked .cv-pct {
+  font-size: 10px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+/*
+ * Narrow strip: drop the absolute P&L, keep the percentage.
+ *
+ * Measured, the two right-hand numbers stop fitting below ~260px: at 250px the
+ * P&L was cut to "+4,..." — an ellipsis in the middle of a number, which is
+ * worse than not showing it, because it looks like a rendering fault and the
+ * digits that survive are meaningless.
+ *
+ * The percentage is the one that still says something on its own ("+7.69%"),
+ * so it is the one that stays. The absolute figure is still in the expanded
+ * panel, one click away.
+ *
+ * Implemented as a CONTAINER query, not a media query and not a JS class.
+ *
+ * A media query would measure the viewport, which is the wrong box: the strip
+ * IS the window, and the window is resized by the main process. A JS class
+ * would need a resize listener plus a call from renderSettings, i.e. two more
+ * places to keep in sync. `container-type: inline-size` makes the widget its
+ * own query container, so the rule below reacts to the strip's own width with
+ * no JavaScript at all.
+ */
+.widget.is-docked { container-type: inline-size; }
+
+@container (max-width: 259px) {
+  .widget.is-docked .cv-pnl { display: none; }
+  .widget.is-docked .cv-right { max-width: none; }
+}
+
+/*
+ * Below 260px the coin row cannot hold six things.
+ *
+ * Measured on the real renderer: at MIN_STRIP_WIDTH (200px) the row overflowed
+ * by 53.5px — the last column was simply pushed past the edge and clipped. The
+ * typed order is icon / ticker / chart / PnL / price / ROI, and something has
+ * to give at the narrow end.
+ *
+ * The ROI goes first: it is the same position as the PnL beside it, just as a
+ * percentage, so nothing is lost that the row does not already say. The PnL is
+ * the figure the row exists to show, and the market price is the input both
+ * are computed from — neither can be dropped.
+ *
+ * This follows the rule already established above: the strip drops detail as
+ * it narrows, rather than squeezing everything until it is unreadable.
+ */
+@container (max-width: 259px) {
+  .widget.is-docked .cv-coin-pct { display: none; }
+  /* 7.1px still stuck out at 200px. The gap and the two minimums are the last
+     slack: 5px → 3px between six children, and 32 → 28 / 26 → 24 on the two
+     money columns still hold "−90.13" and "3,285.4" at these sizes. */
+  .widget.is-docked .cv-coin { gap: 3px; }
+  .widget.is-docked .cv-coin-pnl { min-width: 28px; }
+  .widget.is-docked .cv-coin-price { min-width: 24px; }
+  /*
+   * The chart gives up its extra width first.
+   *
+   * Measured at 200px with the chart still allowed its 69px: the market price
+   * was left with 24px and rendered as "96,4…" — a truncated price is worse
+   * than a slightly shorter chart, because the price is the number the row is
+   * read for. At 56px the chart still holds 18 candles at ~3px each, and every
+   * money column fits whole (200px: 11+3+21+3+56+3+28+3+42 = 170 of 176).
+   */
+  .widget.is-docked .cd-strip { flex: 1 1 56px; max-width: 84px; min-width: 44px; }
+}
+
+/*
+ * In dock mode the strip is the whole window, so the auto-hiding title bar
+ * would sit on top of the numbers. A visual check caught exactly that: the
+ * buttons occupy y 0-20 and the value occupies y 13-31, so they overlapped.
+ *
+ * The bar still works (hover the top edge to reach the buttons), but while it
+ * is open the P&L yields — it is the least important thing in a strip whose
+ * job is to show the total. The total itself is never covered.
+ */
+.widget.is-docked .titlebar { height: 20px; }
+.widget.is-docked .tb-zone { height: 20px; }
+.widget.is-docked .wbtn { width: 20px; height: 16px; font-size: 10px; }
+
+.widget.is-docked.tb-open .cv-right {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/*
+ * "Chỉ chữ" + docked: the halo is sized for a 660px panel, where a 3-10px glow
+ * has room. In a 44px strip that same glow bleeds past the top and bottom
+ * edges and gets clipped, which reads as a dirty smear. The strip is also the
+ * one place where the text sits against the taskbar rather than an arbitrary
+ * wallpaper, so a tighter halo is both cleaner and sufficient.
+ */
+.widget.is-docked[data-theme="bare"] {
+  border-radius: 0;
+  -webkit-text-stroke-width: calc(0.5px + 1.1px * var(--halo));
+  text-shadow: 0 0 calc(1px + 2px * var(--halo)) var(--halo-color);
+}
+.widget.is-docked[data-theme="bare"] .up,
+.widget.is-docked[data-theme="bare"] .pill,
+.widget.is-docked[data-theme="bare"] .cv-pnl.up {
+  text-shadow: 0 0 calc(1px + 2px * var(--halo)) var(--halo-up);
+}
+.widget.is-docked[data-theme="bare"] .down,
+.widget.is-docked[data-theme="bare"] .pill.is-down,
+.widget.is-docked[data-theme="bare"] .cv-pnl.down {
+  text-shadow: 0 0 calc(1px + 2px * var(--halo)) var(--halo-down);
+}
+
+/* the strip has no room for the resize grips' 5px dead zone on every edge */
+.widget.is-docked .grip-n,
+.widget.is-docked .grip-s { height: 3px; }
+.widget.is-docked .grip-e,
+.widget.is-docked .grip-w { width: 3px; }
+
+/* ================================================================ inside the taskbar */
+/**
+ * 'taskbar' mode: the strip is drawn over the taskbar's own rectangle, in the
+ * same row as the taskbar icons.
+ *
+ * Windows has no supported way to make another process's window a child of the
+ * taskbar (it is a window owned by explorer.exe), so this is an overlay placed
+ * exactly on the taskbar's rectangle at the taskbar's height. To read as part
+ * of the taskbar rather than as a floating card on top of it, the strip drops
+ * its own frame: no border, no radius, and a fill that matches the taskbar's
+ * own dark surface instead of the widget's blue-black card.
+ *
+ * The fill is a flat colour, not a gradient, for the same reason: a gradient
+ * would read as a separate object sitting on the taskbar.
+ */
+.widget.is-taskbar {
+  border: 0;
+  border-radius: 6px;
+  background: rgba(32, 32, 32, .92);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+.widget.is-taskbar .collapsed-view {
+  padding: 0 12px;
+  gap: 8px;
+  /*
+   * `center`, NOT `baseline`.
+   *
+   * The strip holds two different type sizes, so the first instinct was
+   * `align-items: baseline` to stop the 14px total and the 11px P&L sitting on
+   * a "stair-step". That fixed the baselines and broke the vertical centring:
+   * with baseline alignment the flex line's cross-size is only as tall as the
+   * text, and the line is placed at the TOP of the container. Measured, the
+   * content sat at y 0-16 inside a 44px strip — 14px above centre, with a
+   * visible void underneath.
+   *
+   * The baselines are still aligned, just one level down: each of the two
+   * groups (cv-left, cv-right) is its own baseline-aligned flex row, and the
+   * row itself is centred. That gives both.
+   */
+  align-items: center;
+}
+.widget.is-taskbar .cv-left { align-items: baseline; }
+.widget.is-taskbar .cv-right { align-items: baseline; }
+.widget.is-taskbar .cv-value { font-size: 14px; }
+.widget.is-taskbar .cv-pnl { font-size: 11px; }
+.widget.is-taskbar .cv-pct { font-size: 10px; }
+
+/* ================================================================ per-coin rows */
+/**
+ * The coin rows sit UNDER the summary line, inside the same strip.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the line spacing is 13px and not the 18-20 a normal list would use
+ *
+ * The strip is an overlay inside the taskbar's own rectangle, so its height is
+ * capped by the taskbar's: a 48px taskbar leaves 44px of usable box. The
+ * summary line takes one 13px line, which leaves room for two coin rows and
+ * nothing more. At 18px per row the third line would be clipped mid-glyph, and
+ * a half-drawn number is worse than one that is not shown at all.
+ *
+ * The user asked for the rows to sit closer together than they were, and this
+ * is the tightest spacing that still keeps the 10px text off its neighbours:
+ * 13px line box for 10px type leaves 3px of air, which is what stops the
+ * descenders of one row touching the caps of the next.
+ * ---------------------------------------------------------------------------
+ */
+.cv-coins {
+  display: flex;
+  flex-direction: column;
+  /* 0, not a gap: the 13px line box already carries the separation, and a gap
+     on top of it would push the last row out of a 44px strip. */
+  gap: 0;
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+}
+
+.cv-coin {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 13px;
+  line-height: 13px;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The logo is 11px here, not the 18px of the panel: at 13px of row height an
+   18px badge would overlap the row above and below. */
+.cv-coin .coin,
+.cv-coin .coin-sm {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  font-size: 5px;
+  letter-spacing: 0;
+  box-shadow: none;
+}
+
+.cv-coin-sym {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .1px;
+  flex: 0 0 auto;
+  /* A 4-character ticker at 9.5px is ~26px; the cap keeps a long one from
+     eating the price. */
+  max-width: 42px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * The price is NO LONGER the flexible item.
+ *
+ * It used to be `flex: 1 1 auto`, which was right when the row was
+ * ticker · chart · price · ROI: the price absorbed the slack and the
+ * chart sat against the ticker. With a PnL column added, a flexible price
+ * would push the chart left and the PnL would drift with it — the chart has
+ * to be the thing that floats, not the numbers.
+ *
+ * So every number is `0 0 auto` and the chart takes `margin: 0 auto`, which
+ * splits the leftover space evenly on both sides of it. That is what centres
+ * it in the gap between the ticker and the figures, and it stays centred when
+ * the strip is dragged wider.
+ */
+.cv-coin-price {
+  font-size: 9.5px;
+  /* Shrinkable with an ellipsis: at the narrow end this is what absorbs the
+     last few pixels rather than pushing the ROI past the edge. */
+  flex: 0 1 auto;
+  min-width: 26px;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * The position's PnL in USDT, between the chart and the market price.
+ *
+ * `min-width` rather than a fixed width: the column must not resize as the
+ * number grows from "+0.42" to "+1.2k", or the price beside it would shift on
+ * every tick. 34px holds "−1.2k" at 9px.
+ */
+.cv-coin-pnl {
+  font-size: 9px;
+  flex: 0 1 auto;
+  min-width: 32px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cv-coin-pct {
+  font-size: 9px;
+  flex: 0 0 auto;
+  min-width: 36px;
+  text-align: right;
+}
+
+/*
+ * The strip becomes a COLUMN only when it actually holds coin rows: the
+ * summary line on top, the rows beneath it.
+ *
+ * Guarded by `:has(.cv-coins:not([hidden]))` on purpose. Making the strip a
+ * column unconditionally would change the layout of every existing install
+ * that has no coin ticked — the summary would be re-laid-out for a case that
+ * is not happening. With the guard, a strip with no coins selected is exactly
+ * the flex row every earlier version drew.
+ */
+/*
+ * `.is-collapsed`, not `.is-docked`.
+ *
+ * The first version of this rule was scoped to `.is-docked` / `.is-taskbar`,
+ * which is only true when the widget is pinned to the taskbar. In the default
+ * FLOATING mode the widget carries `is-collapsed` alone — so the rule never
+ * applied, the strip stayed a flex ROW, and the coin rows were laid out beside
+ * the summary instead of under it. The screenshot showed the coin list printed
+ * straight over the total.
+ *
+ * `is-collapsed` is the class that actually means "the strip is showing", in
+ * every dock mode, so that is what this keys off.
+ */
+.widget.is-collapsed .collapsed-view:has(.cv-coins:not([hidden])) {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+/*
+ * When coin rows are present the summary line and the right-hand group have to
+ * share one row, so the value drops a point. Measured: at 14px the total plus
+ * two coin rows overflowed a 44px strip by 3px.
+ */
+.widget.is-collapsed .collapsed-view:has(.cv-coins:not([hidden])) .cv-value {
+  font-size: 12.5px;
+}
+.widget.is-collapsed .collapsed-view:has(.cv-coins:not([hidden])) .cv-pnl {
+  font-size: 10px;
+}
+.widget.is-collapsed .collapsed-view:has(.cv-coins:not([hidden])) .cv-pct {
+  font-size: 9px;
+}
+
+/*
+ * The summary line and the right-hand group must sit on ONE line above the
+ * coin rows. They are siblings in the column, so they are wrapped by the
+ * markup change below — this rule only exists to keep the two of them from
+ * each taking a full row when the wrapper is absent (an older cached page).
+ */
+.cv-sum {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  flex: 0 0 auto;
+  /* 100%, not `auto`: as a flex item in a row its width collapsed to 0, which
+     is why the summary and the coin rows ended up on top of each other. */
+  width: 100%;
+  min-width: 0;
+}
+
+/*
+ * The strip is only ~40px tall and sits over the taskbar, so the auto-hiding
+ * bar's buttons would land on the numbers. Same rule as the edge strip: the
+ * bar still opens on hover, and the P&L yields while it is open.
+ */
+.widget.is-taskbar .titlebar { height: 18px; }
+.widget.is-taskbar .tb-zone { height: 18px; }
+.widget.is-taskbar .wbtn { width: 18px; height: 15px; font-size: 9px; }
+.widget.is-taskbar.tb-open .cv-right { opacity: 0; pointer-events: none; }
+
+/*
+ * "Chỉ chữ" inside the taskbar: the whole point of that style is that nothing
+ * is drawn, so the taskbar fill above must not apply. The text keeps its halo,
+ * which is what makes it readable against the taskbar's own surface.
+ */
+.widget.is-taskbar[data-theme="bare"] {
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: 0;
+}
+
+/* a vertical taskbar cannot host a horizontal strip; the app falls back to
+   'edge' placement, and this class is never applied in that case */
+
+/* ================================================================ settings sheet */
+/*
+ * Three-way segmented control for the placement picker.
+ *
+ * The labels are longer than a two-way split can hold ("Cửa sổ nổi" / "Sát
+ * taskbar" / "Trong taskbar"), so the font drops a notch and the padding
+ * tightens — otherwise the longest label wraps and the control grows a second
+ * line. Kept here rather than in styles.css because it exists only for the
+ * placement control this file is about.
+ */
+.seg-3 .seg-btn { font-size: 11px; padding: 7px 3px; letter-spacing: -.1px; }

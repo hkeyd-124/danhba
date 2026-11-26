@@ -111,7 +111,7 @@ Bấm **⚙** → mục **Hiển thị**. Mỗi ô là một công tắc độc 
 | **Lãi/lỗ** | Số P&L tuyệt đối |
 | **Phần trăm** | % lãi/lỗ |
 | **Biểu đồ nến** | Nến Nhật, ở dòng tổng |
-| **Theo dõi từng coin trong dải** | Mỗi coin được tích thêm **một dòng riêng**: logo + mã + **nến** + giá + % |
+| **Theo dõi từng coin trong dải** | Mỗi coin được tích thêm **một dòng riêng**: logo + mã + **nến** + **PnL** + giá + % |
 
 Và trong nhóm **Danh sách chi tiết**:
 
@@ -121,6 +121,33 @@ Và trong nhóm **Danh sách chi tiết**:
 | **Biểu đồ nến** | Nến Nhật, trong mỗi dòng coin |
 
 Hai công tắc `Biểu đồ nến` là **độc lập với nhau**: tắt nến trong dải thì panel vẫn còn, và ngược lại.
+
+#### Thứ tự các cột trong một dòng coin
+
+Dòng coin đọc từ trái sang phải theo đúng thứ tự này, ở **cả hai chỗ**:
+
+```
+{icon}  {tên}  {chart}  {PnL}  {giá market}  {ROI}
+```
+
+| Cột | Ở dải taskbar | Ở danh sách chi tiết |
+|---|---|---|
+| **icon** | logo 11px | logo 22px |
+| **tên** | mã coin, 9.5px | mã coin, luôn hiện kể cả khi bật icon |
+| **chart** | nến 84px (co còn 56px khi hẹp) | nến 88px |
+| **PnL** | số USDT rút gọn (`+67.76`, `−1.2k`) | `+18.56 (+1.11%)` ở dòng dưới |
+| **giá market** | giá mark | giá mark + `USDT` |
+| **ROI** | % của chính vị thế | % của chính vị thế |
+
+**PnL ở dải là PnL của vị thế, không phải % biến động 24h của coin.** ROI bên cạnh là phần trăm của *cùng vị thế đó*, nên hai số cạnh nhau trả lời *"lãi bao nhiêu tiền, và bằng bao nhiêu phần trăm vốn đã bỏ ra"*. Giá market nằm giữa vì nó là đầu vào của cả hai.
+
+**Vì sao PnL ở dải được rút gọn?** `−1,234.56` chiếm một phần năm bề rộng dải 300px và sẽ đẩy giá ra ngoài. Hàng nghìn rút thành `k` (`+1.2k`, `−12k`) để cột giữ bề rộng ổn định — nếu không, giá bên cạnh sẽ nhảy sang ngang mỗi khi một vị thế vượt 1.000.
+
+**Vì sao chart luôn nằm giữa?** Mọi cột số đều là `flex: 0 0 auto` (không co giãn), chỉ chart có `margin: 0 auto` — nên khoảng trống dư được chia đều hai bên chart. Đo thật trên renderer: ở 300px chart cách tên 16.6px và cách PnL 16.6px; ở 476px là 104.6px và 104.6px. Trước đây cột giá là `flex: 1 1 auto`, nên nó nuốt hết khoảng trống và đẩy chart dạt sang trái.
+
+**Khi dải hẹp dưới 260px thì sao?** Dải có thể kéo nhỏ tới **200px**, và ở mức đó sáu cột không vừa: đo được **tràn 53.5px** — cột cuối bị đẩy ra ngoài và cắt mất. Nên dưới 260px app bỏ **cột ROI** trước (nó là cùng một vị thế với PnL, chỉ khác đơn vị), thu gap 5px→3px, và cho chart co từ 84px xuống 56px. Kết quả đo lại: **tràn 0px ở mọi bề rộng 200 / 240 / 300 / 380 / 476**, và không con số nào bị cắt bằng dấu `…`.
+
+> **Vì sao bỏ ROI mà không bỏ PnL?** Vì PnL là con số mà dòng coin tồn tại để hiện, còn giá market là đầu vào để tính ra nó — không thể bỏ cái nào. ROI là cách diễn đạt lại PnL bằng phần trăm, nên nó là thứ duy nhất bỏ được mà không mất thông tin mới.
 
 Danh sách coin để tích được **sinh từ chính danh mục của bạn** — mua coin mới thì nó tự xuất hiện trong danh sách, không phải chờ bản cập nhật. Mỗi dòng trong danh sách có **logo thật của coin** bên cạnh ô tích, nên nhận ra coin ngay thay vì phải đọc từng mã. Bán hết một coin thì dòng của nó tự biến mất khỏi dải (không để lại dòng `0.00` vô nghĩa), nhưng **ô tích vẫn được nhớ** — mua lại là dòng hiện lại ngay.
 
@@ -137,6 +164,7 @@ Mỗi coin có một **biểu đồ nến Nhật** — thân nến là giá mở
 | Nguồn | `fapi.binance.com/fapi/v1/klines` — **cùng host** với giá đang dùng |
 | Khung nến | Chọn được: **5m / 15m / 1h / 4h / 1d** (một khung cho mọi coin) |
 | Số nến | 36 nến trong panel, 18 nến trong dải — nến nhỏ, nhiều cây, nhìn ra xu hướng |
+| Bề rộng | 88px ở panel; 84px ở dải, co xuống 56px khi dải hẹp dưới 260px |
 | Tần suất làm mới | **60 giây** (bằng một chu kỳ nến; nhanh hơn thì chỉ tải lại đúng dữ liệu cũ) |
 | Hiện ở đâu | **Cả hai**: dòng coin trong dải taskbar và danh sách chi tiết |
 | Màu | Xanh khi nến tăng, đỏ khi giảm — cùng ngôn ngữ với P&L |
@@ -410,7 +438,7 @@ Ghi file theo kiểu **atomic** (ghi file tạm rồi rename), nên mất điệ
 ## Kiểm thử
 
 ```bat
-npm test          :: 261 unit test (toán danh mục + feed + cảnh báo + migration dữ liệu + hình học biểu đồ + vai trò cửa sổ + kích thước dải ghim + chọn coin theo dõi + logo coin + tương phản màu chữ + nến Binance + hình học nến Nhật + toán future demo: cross/isolate, khối lượng, ký quỹ, thanh lý)
+npm test          :: 254 unit test (toán danh mục + feed + cảnh báo + migration dữ liệu + hình học biểu đồ + vai trò cửa sổ + kích thước dải ghim + chọn coin theo dõi + logo coin + tương phản màu chữ + nến Binance + hình học nến Nhật + toán future demo: cross/isolate, khối lượng, ký quỹ, thanh lý)
 ```
 
 E2e cần Xvfb (Linux/CI) vì nó khởi động Electron thật:
@@ -438,6 +466,7 @@ xvfb-run -a node test/shots-v8.js   # ảnh chụp form cảnh báo "chạm mố
 xvfb-run -a node test/shots-v9.js   # ảnh chụp dải ở 3 chiều rộng + mức tối thiểu → shots-v9/
 xvfb-run -a node test/shots-v10.js  # ảnh chụp bảng chọn coin (có logo), dải có dòng LDO/SUI, ô màu chữ → shots-v10/
 xvfb-run -a node test/shots-spark.js # ảnh chụp nến: panel, dải, nền Chỉ chữ, theme Sáng → shots-spark/
+xvfb-run -a node test/measure-row.js # số đo thật của DÒNG COIN ở 5 bề rộng: thứ tự cột, chart có canh giữa không, có tràn không
 xvfb-run -a node test/measure-v9.js # số đo thật của dải ở 7 chiều rộng (căn dọc, padding, cắt cụt)
 xvfb-run -a node test/dock-measure.js # số đo hình học thật của dải
 ```
